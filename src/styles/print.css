@@ -1,0 +1,140 @@
+/* ==========================================================================
+   Print stylesheet — thermal receipts (58/80mm) and barcode label sheets.
+
+   The page size itself is injected at print time by utils/print.js, because an
+   @page rule cannot read a CSS variable or sit inside a class selector.
+   ========================================================================== */
+
+/* On screen the receipt is shown as a paper-like preview. */
+.receipt {
+  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.42;
+  color: #000;
+  background: #fff;
+  width: 302px;           /* ~80mm at 96dpi */
+  padding: 12px 14px;
+  margin: 0 auto;
+}
+.receipt.w58 { width: 219px; font-size: 11px; }
+.receipt.w75 { width: 283px; font-size: 11.5px; }
+.receipt.wa4 { width: 700px; font-size: 13px; padding: 30px; }
+
+.receipt-head { text-align: center; margin-bottom: 8px; }
+.receipt-logo { max-width: 120px; max-height: 60px; margin: 0 auto 6px; display: block; }
+.receipt-shop { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+.receipt.w58 .receipt-shop { font-size: 13px; }
+.receipt-meta { font-size: 10.5px; }
+
+.receipt hr {
+  border: none;
+  border-top: 1px dashed #000;
+  margin: 7px 0;
+}
+
+.receipt-rows { width: 100%; border-collapse: collapse; }
+.receipt-rows td, .receipt-rows th {
+  padding: 1px 0;
+  border: none;
+  font-size: inherit;
+  background: none;
+  color: #000;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.receipt-rows th {
+  font-size: 10px;
+  border-bottom: 1px solid #000;
+  padding-bottom: 2px;
+  font-weight: 700;
+  text-align: left;
+}
+.receipt-rows .r { text-align: right; }
+.receipt-item-name { padding-top: 4px !important; font-weight: 600; }
+.receipt-disc { font-size: 10px; font-style: italic; }
+
+.receipt-total {
+  display: flex; justify-content: space-between;
+  padding: 1px 0; font-size: inherit;
+}
+.receipt-total.grand {
+  font-size: 15px; font-weight: 700;
+  border-top: 1px solid #000; border-bottom: 1px double #000;
+  padding: 4px 0; margin: 4px 0;
+}
+.receipt.w58 .receipt-total.grand { font-size: 13px; }
+.receipt-foot { text-align: center; margin-top: 9px; font-size: 10.5px; }
+.receipt-barcode { text-align: center; margin-top: 8px; }
+.receipt-barcode svg { max-width: 100%; }
+/* An undrawn barcode is an empty <svg>, sized 300x150px by default: collapse it rather than print a blank gap. */
+.receipt-barcode svg:empty { display: none; }
+
+/* --- What actually reaches the printer ---------------------------------- */
+
+@media print {
+  /* Collapse the whole app; only the marked print area is put on paper. */
+  body.printing > #root { display: none !important; }
+
+  body.printing::after { content: none; }
+
+  /* The app sets html/body to height:100% and uses centring layouts. Left in
+     place those turn a 90mm receipt into a full-page sheet with the bill
+     floating in the middle of it, so they are all neutralised here. */
+  html, body {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    place-items: initial !important;
+  }
+
+  #print-portal {
+    display: block !important;
+    position: static !important;
+    width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* No trailing slack after the last line of the bill. */
+  #print-portal > *:last-child { margin-bottom: 0 !important; }
+
+  .receipt {
+    width: 100% !important;
+    padding: 0 2mm;
+    margin: 0 !important;
+    font-size: 11.5px;
+  }
+  .receipt.wa4 { width: 100% !important; padding: 12mm; }
+  .receipt-foot { margin-bottom: 0 !important; }
+
+  .no-print { display: none !important; }
+
+  /* Labels: fixed physical geometry so they line up with sticker stock. */
+  .label-sheet {
+    display: grid;
+    gap: 2mm;
+    padding: 4mm;
+  }
+  .label-cell {
+    border: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding: 1mm;
+    text-align: center;
+  }
+  /* Natural width, never stretched: width:100% overrode the bar width and made every barcode span the whole label. */
+  .label-cell svg { width: auto; max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Off-screen host for print output; only made visible by the media query. */
+#print-portal { display: none; }

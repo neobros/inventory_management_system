@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-desktop
+.env
+.env.local
+*.log
+.DS_Store
+
+# Firebase service-account key - NEVER commit this
+serviceAccount.json
+
+# Built installers
+release/

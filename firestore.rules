@@ -1,0 +1,182 @@
+rules_version = '2';
+
+// =============================================================================
+// StockPilot security rules
+//
+// Paste into Firebase Console -> Firestore Database -> Rules -> Publish.
+// Nothing in here needs editing.
+//
+// The first account that ever signs in becomes the platform super admin and
+// writes /platform/bootstrap. That document can be created but never changed or
+// deleted, so once your admin account has signed in the role is locked and no
+// later sign-in can claim it.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function platformClaimed() {
+      return exists(/databases/$(database)/documents/platform/bootstrap);
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function hasProfile() {
+      return signedIn() && exists(profilePath());
+    }
+
+    function profile() {
+      return get(profilePath()).data;
+    }
+
+    function isSuper() {
+      return hasProfile() && profile().role == 'superadmin';
+    }
+
+    // Any active staff member of the given shop: owner, manager or cashier.
+    function memberOf(shopId) {
+      return hasProfile()
+        && profile().shopId == shopId
+        && profile().active != false;
+    }
+
+    // Staff allowed to change catalogue, stock and shop settings.
+    function managerOf(shopId) {
+      return memberOf(shopId) && profile().role in ['owner', 'manager'];
+    }
+
+    function ownerOf(shopId) {
+      return memberOf(shopId) && profile().role == 'owner';
+    }
+
+    // --- Platform ownership marker -------------------------------------------
+    // Write-once. `create` only ever applies to a document that does not exist,
+    // and update/delete are refused outright, so the first writer keeps it.
+    match /platform/bootstrap {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.claimedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // --- Published app version -----------------------------------------------
+    // Every till reads this on startup to find out whether a newer build exists.
+    // Only the platform admin may publish.
+    match /platform/appVersion {
+      allow read: if signedIn();
+      allow write: if isSuper();
+    }
+
+    // --- User profiles -------------------------------------------------------
+    match /users/{uid} {
+      // You can always read yourself; super admins read everyone; shop staff
+      // read colleagues in the same shop.
+      allow read: if signedIn() && (
+        request.auth.uid == uid
+        || isSuper()
+        || (hasProfile() && profile().shopId == resource.data.shopId)
+      );
+
+      allow create: if signedIn() && (
+        // Bootstrap: the very first sign-in on an unclaimed platform writes its
+        // own super-admin profile. Once /platform/bootstrap exists this arm is
+        // dead forever, so nobody can self-promote afterwards.
+        (request.auth.uid == uid
+          && request.resource.data.role == 'superadmin'
+          && !platformClaimed())
+
+        // Super admin provisions a shop owner.
+        || (isSuper() && request.resource.data.role == 'owner')
+
+        // A shop owner adds their own cashiers and managers.
+        || (ownerOf(request.resource.data.shopId)
+            && request.resource.data.role in ['cashier', 'manager'])
+      );
+
+      allow update, delete: if isSuper()
+        || (ownerOf(resource.data.shopId) && resource.data.role != 'owner');
+    }
+
+    // --- Shop login credentials ----------------------------------------------
+    // Holds each shop's owner password so the platform admin can look it up and
+    // hand it over. SUPER ADMIN ONLY — deliberately a separate collection,
+    // because rules grant access per document: anything kept on shops/{id}
+    // would be readable by that shop's own staff.
+    match /shopCredentials/{shopId} {
+      // The shop owner may read and update their own entry — they change their
+      // password from My Account and this copy has to follow, or the admin's
+      // record goes stale.
+      allow read, write: if isSuper() || ownerOf(shopId);
+    }
+
+    // --- Shops ---------------------------------------------------------------
+    match /shops/{shopId} {
+      allow read: if isSuper() || memberOf(shopId);
+      allow create, delete: if isSuper();
+      allow update: if isSuper() || managerOf(shopId);
+
+      // --- Everything that belongs to one shop -------------------------------
+
+      match /products/{productId} {
+        allow read: if memberOf(shopId) || isSuper();
+        // Cashiers need write access because completing a sale decrements stock.
+        allow create, update: if memberOf(shopId);
+        allow delete: if managerOf(shopId);
+      }
+
+      match /sales/{saleId} {
+        allow read: if memberOf(shopId) || isSuper();
+        allow create: if memberOf(shopId);
+
+        // A bill is an audit record: the charged figures are never editable and
+        // it is never deleted. The one exception is the return bookkeeping —
+        // how much has gone back — which is restricted to these three fields, so
+        // totals, items, payment and cashier can never be rewritten.
+        allow update: if memberOf(shopId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['returnedQty', 'refundedTotal', 'voided']);
+        allow delete: if false;
+      }
+
+      // Returns and voided bills, written as their own reversing documents
+      // rather than by editing the original sale.
+      match /returns/{returnId} {
+        allow read: if memberOf(shopId) || isSuper();
+        allow create: if memberOf(shopId);
+        allow update, delete: if false;
+      }
+
+      match /movements/{movementId} {
+        allow read: if memberOf(shopId) || isSuper();
+        allow create: if memberOf(shopId);
+        allow update, delete: if false;
+      }
+
+      match /categories/{categoryId} {
+        allow read: if memberOf(shopId) || isSuper();
+        allow write: if managerOf(shopId);
+      }
+
+      // Staff login passwords, so the owner can look them up and reset them.
+      // Owner only: a cashier must not be able to read a manager's password.
+      match /staffCredentials/{uid} {
+        allow read, write: if ownerOf(shopId) || isSuper();
+      }
+
+      // Invoice counter.
+      match /meta/{docId} {
+        allow read, write: if memberOf(shopId);
+      }
+    }
+
+    // Anything not matched above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
