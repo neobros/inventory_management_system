@@ -125,7 +125,8 @@ service cloud.firestore {
       match /products/{productId} {
         allow read: if memberOf(shopId) || isSuper();
         // Cashiers need write access because completing a sale decrements stock.
-        allow create, update: if memberOf(shopId);
+        // The platform admin can add products too (admin panel -> Import Products).
+        allow create, update: if memberOf(shopId) || isSuper();
         allow delete: if managerOf(shopId);
       }
 
@@ -153,13 +154,13 @@ service cloud.firestore {
 
       match /movements/{movementId} {
         allow read: if memberOf(shopId) || isSuper();
-        allow create: if memberOf(shopId);
+        allow create: if memberOf(shopId) || isSuper();
         allow update, delete: if false;
       }
 
       match /categories/{categoryId} {
         allow read: if memberOf(shopId) || isSuper();
-        allow write: if managerOf(shopId);
+        allow write: if managerOf(shopId) || isSuper();
       }
 
       // Staff login passwords, so the owner can look them up and reset them.

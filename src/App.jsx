@@ -12,6 +12,7 @@ import POS from './pages/POS'
 import Sales from './pages/Sales'
 import Products from './pages/Products'
 import Labels from './pages/Labels'
+import ItemList from './pages/ItemList'
 import Stock from './pages/Stock'
 import Reports from './pages/Reports'
 import Staff from './pages/Staff'
@@ -19,6 +20,7 @@ import Settings from './pages/Settings'
 import AdminShops from './pages/admin/AdminShops'
 import AdminOverview from './pages/admin/AdminOverview'
 import AdminRelease from './pages/admin/AdminRelease'
+import AdminImport from './pages/admin/AdminImport'
 import UpdateGate from './components/UpdateGate'
 import TitleBar from './components/TitleBar'
 
@@ -140,6 +142,7 @@ export default function App() {
               <Route path="/sales" element={<Guard allow={SHOP_ROLES}><Sales /></Guard>} />
               <Route path="/products" element={<Guard allow={MANAGER_ROLES}><Products /></Guard>} />
               <Route path="/labels" element={<Guard allow={MANAGER_ROLES}><Labels /></Guard>} />
+              <Route path="/item-list" element={<Guard allow={MANAGER_ROLES}><ItemList /></Guard>} />
               <Route path="/stock" element={<Guard allow={MANAGER_ROLES}><Stock /></Guard>} />
               <Route path="/reports" element={<Guard allow={MANAGER_ROLES}><Reports /></Guard>} />
               <Route path="/staff" element={<Guard allow={['owner']}><Staff /></Guard>} />
@@ -147,6 +150,7 @@ export default function App() {
 
               <Route path="/admin" element={<Guard allow={['superadmin']}><AdminShops /></Guard>} />
               <Route path="/admin/overview" element={<Guard allow={['superadmin']}><AdminOverview /></Guard>} />
+              <Route path="/admin/import" element={<Guard allow={['superadmin']}><AdminImport /></Guard>} />
               <Route path="/admin/release" element={<Guard allow={['superadmin']}><AdminRelease /></Guard>} />
             </Route>
 

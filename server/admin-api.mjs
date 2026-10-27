@@ -20,16 +20,22 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { timingSafeEqual } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { importProducts } from './product-import.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const KEY_PATH = path.join(root, 'serviceAccount.json')
+// Optional .env in the project root (gitignored) — holds IMPORT_API_KEY.
+if (existsSync(path.join(root, '.env'))) process.loadEnvFile(path.join(root, '.env'))
+
 const PORT = Number(process.env.ADMIN_API_PORT) || 5174
+const IMPORT_API_KEY = process.env.IMPORT_API_KEY || ''
 
 const grey = (m) => `\x1b[90m${m}\x1b[0m`
 
@@ -53,24 +59,27 @@ const json = (res, code, body) => {
   res.writeHead(code, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   })
   res.end(JSON.stringify(body))
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = 1e6) {
   return new Promise((resolve, reject) => {
     let data = ''
     req.on('data', (chunk) => {
       data += chunk
-      if (data.length > 1e6) reject(new Error('Request too large'))
+      if (data.length > maxBytes) {
+        reject(Object.assign(new Error('Request too large'), { status: 413 }))
+        req.destroy()
+      }
     })
     req.on('end', () => {
       try {
         resolve(data ? JSON.parse(data) : {})
-      } catch {
-        reject(new Error('Malformed JSON'))
+      } catch (err) {
+        reject(Object.assign(new Error(`Malformed JSON: ${err.message}`), { status: 400 }))
       }
     })
     req.on('error', reject)
@@ -100,6 +109,28 @@ async function requireSuperAdmin(req) {
     throw Object.assign(new Error('Only the platform administrator can do that.'), { status: 403 })
   }
   return decoded
+}
+
+/**
+ * Lets tools like Postman call the import without a Firebase login: a matching
+ * X-API-Key header is enough. Without a key configured, only a super admin's
+ * ID token is accepted.
+ */
+async function requireImportAccess(req) {
+  const given = String(req.headers['x-api-key'] || '')
+  if (given) {
+    if (!IMPORT_API_KEY) {
+      throw Object.assign(new Error('API key access is off — set IMPORT_API_KEY in .env and restart.'), { status: 401 })
+    }
+    const a = Buffer.from(given)
+    const b = Buffer.from(IMPORT_API_KEY)
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      throw Object.assign(new Error('Invalid API key.'), { status: 401 })
+    }
+    return 'api-import'
+  }
+  const decoded = await requireSuperAdmin(req)
+  return decoded.email || decoded.uid
 }
 
 const routes = {
@@ -145,6 +176,21 @@ createServer(async (req, res) => {
   const route = (req.url || '').replace(/^\/api\//, '').split('?')[0]
 
   if (route === 'health') return json(res, 200, { ok: true })
+
+  if (route === 'products/import') {
+    if (req.method !== 'POST') return json(res, 405, { error: 'Use POST.' })
+    try {
+      const actor = await requireImportAccess(req)
+      const body = await readBody(req, 20e6)
+      const shopId = new URL(req.url, 'http://x').searchParams.get('shopId')
+      const report = await importProducts(db, { shopId, body, actor })
+      // 200 all saved, 207 some rejected, 422 nothing saved.
+      const code = report.rejectedCount === 0 ? 200 : report.createdCount > 0 ? 207 : 422
+      return json(res, code, report)
+    } catch (err) {
+      return json(res, err.status || 500, { ok: false, error: err.message || 'Something went wrong.' })
+    }
+  }
 
   const handler = routes[route]
   if (!handler || req.method !== 'POST') return json(res, 404, { error: 'Not found' })

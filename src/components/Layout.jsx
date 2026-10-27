@@ -20,6 +20,7 @@ const SHOP_NAV = [
   { to: '/dashboard', icon: '📊', label: 'Dashboard', manageOnly: true },
   { to: '/products', icon: '📦', label: 'Products', manageOnly: true },
   { to: '/labels', icon: '🏷️', label: 'Barcode Labels', manageOnly: true },
+  { to: '/item-list', icon: '🖨️', label: 'Print Item List', manageOnly: true },
   { to: '/stock', icon: '🔄', label: 'Stock Movements', manageOnly: true },
   { to: '/reports', icon: '📈', label: 'Reports', manageOnly: true },
   { group: 'Shop', manageOnly: true },
@@ -31,6 +32,7 @@ const ADMIN_NAV = [
   { group: 'Platform' },
   { to: '/admin', icon: '🏬', label: 'Shops' },
   { to: '/admin/overview', icon: '📊', label: 'Overview' },
+  { to: '/admin/import', icon: '📥', label: 'Import Products' },
   { to: '/admin/release', icon: '🚀', label: 'App Updates' },
 ]
 
@@ -47,6 +49,8 @@ const TITLES = {
   '/admin': ['Shops', 'Every shop on the platform'],
   '/admin/overview': ['Platform Overview', 'Tenant activity across all shops'],
   '/account': ['My Account', 'Your profile and password'],
+  '/item-list': ['Print Item List', 'Every product with its SKU, on A4'],
+  '/admin/import': ['Import Products', 'Add many products to a shop from JSON'],
   '/admin/release': ['App Updates', 'Publish a new till version to every shop'],
 }
 
