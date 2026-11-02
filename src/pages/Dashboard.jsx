@@ -129,7 +129,7 @@ export default function Dashboard() {
                           <div className="cell-sub">{p.supplier || 'No supplier set'}</div>
                         </td>
                         <td className="num">{p.lowStockAt}</td>
-                        <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} /></td>
+                        <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} unit={p.unit} /></td>
                       </tr>
                     ))}
                   </tbody>

@@ -127,7 +127,8 @@ service cloud.firestore {
         // Cashiers need write access because completing a sale decrements stock.
         // The platform admin can add products too (admin panel -> Import Products).
         allow create, update: if memberOf(shopId) || isSuper();
-        allow delete: if managerOf(shopId);
+        // The platform admin can bulk-delete too (admin panel -> Delete Products).
+        allow delete: if managerOf(shopId) || isSuper();
       }
 
       match /sales/{saleId} {

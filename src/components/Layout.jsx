@@ -33,6 +33,8 @@ const ADMIN_NAV = [
   { to: '/admin', icon: '🏬', label: 'Shops' },
   { to: '/admin/overview', icon: '📊', label: 'Overview' },
   { to: '/admin/import', icon: '📥', label: 'Import Products' },
+  { to: '/admin/delete-products', icon: '🗑️', label: 'Delete Products' },
+  { to: '/admin/duplicates', icon: '🔁', label: 'Duplicate Check' },
   { to: '/admin/release', icon: '🚀', label: 'App Updates' },
 ]
 
@@ -50,6 +52,8 @@ const TITLES = {
   '/admin/overview': ['Platform Overview', 'Tenant activity across all shops'],
   '/account': ['My Account', 'Your profile and password'],
   '/item-list': ['Print Item List', 'Every product with its SKU, on A4'],
+  '/admin/duplicates': ['Duplicate Check', 'Find products in a shop that share a SKU, barcode or name'],
+  '/admin/delete-products': ['Delete Products', 'Remove many products from a shop using a JSON list'],
   '/admin/import': ['Import Products', 'Add many products to a shop from JSON'],
   '/admin/release': ['App Updates', 'Publish a new till version to every shop'],
 }

@@ -3,8 +3,11 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { listProducts, findByBarcode } from '../services/products'
 import { createSale } from '../services/sales'
-import { calcTotals, lineNet } from '../utils/cart'
+import { calcTotals, lineGross, lineNet } from '../utils/cart'
 import { normaliseScan } from '../utils/barcode'
+import {
+  isMeasured, entryUnits, quickAmounts, roundQty, toProductUnit, formatQty, perUnit,
+} from '../utils/units'
 import { money } from '../utils/format'
 import { printPortal, printBill, nextFrame } from '../utils/print'
 import { Modal, Field, Empty, Loading } from '../components/ui'
@@ -29,6 +32,11 @@ export default function POS() {
   const [method, setMethod] = useState('cash')
   const [paid, setPaid] = useState('')
   const [customer, setCustomer] = useState('')
+
+  // Weigh screen for kg / g / litre / ml / metre items: { product, mode: 'add' | 'set' }.
+  const [weighing, setWeighing] = useState(null)
+  const [weighAmount, setWeighAmount] = useState('')
+  const [weighUnit, setWeighUnit] = useState('')
 
   const scanRef = useRef(null)
 
@@ -58,20 +66,41 @@ export default function POS() {
 
   /** Stock still on the shelf once what is already in the cart is accounted for. */
   const available = useCallback(
-    (product) => (Number(product.stock) || 0) - (cart.find((c) => c.productId === product.id)?.qty || 0),
+    (product) => roundQty((Number(product.stock) || 0) - (cart.find((c) => c.productId === product.id)?.qty || 0)),
     [cart]
   )
 
-  const addToCart = useCallback((product) => {
-    if (available(product) <= 0) {
-      toast.error(`${product.name} is out of stock.`)
-      return
+  const openWeigh = useCallback((product, mode = 'add') => {
+    const line = cart.find((c) => c.productId === product.id)
+    const first = entryUnits(product.unit)[0]
+    setWeighUnit(first.unit)
+    // When changing a line, start from what is already on it, in the entry unit.
+    setWeighAmount(mode === 'set' && line ? String(roundQty(line.qty / first.factor)) : '')
+    setWeighing({ product, mode })
+  }, [cart])
+
+  /**
+   * Adds `qty` of a product, in the product's own unit. Weighed goods with no
+   * qty given open the weigh screen instead — 1 kg is rarely what was bought.
+   */
+  const addToCart = useCallback((product, qty) => {
+    if (qty === undefined && isMeasured(product.unit)) {
+      if (available(product) <= 0) return toast.error(`${product.name} is out of stock.`)
+      openWeigh(product)
+      return undefined
+    }
+    const amount = roundQty(qty ?? 1)
+    if (available(product) < amount) {
+      toast.error(available(product) <= 0
+        ? `${product.name} is out of stock.`
+        : `Only ${formatQty(available(product), product.unit)} of ${product.name} left.`)
+      return undefined
     }
     setCart((list) => {
       const idx = list.findIndex((c) => c.productId === product.id)
       if (idx >= 0) {
         const copy = [...list]
-        copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 }
+        copy[idx] = { ...copy[idx], qty: roundQty(copy[idx].qty + amount) }
         return copy
       }
       return [...list, {
@@ -80,13 +109,38 @@ export default function POS() {
         barcode: product.barcode || '',
         unit: product.unit || 'pcs',
         price: Number(product.price) || 0,
+        listPrice: Number(product.price) || 0,
+        cost: Number(product.cost) || 0,
         stock: Number(product.stock) || 0,
-        qty: 1,
+        qty: amount,
         discountType: 'amount',
         discountValue: 0,
       }]
     })
-  }, [available, toast])
+    return undefined
+  }, [available, openWeigh, toast])
+
+  const weighQty = weighing ? toProductUnit(weighAmount, weighUnit, weighing.product.unit) : 0
+  const weighPrice = weighing
+    ? Number(cart.find((c) => c.productId === weighing.product.id)?.price ?? weighing.product.price) || 0
+    : 0
+
+  const confirmWeigh = (e) => {
+    e?.preventDefault()
+    const { product, mode } = weighing
+    if (!(weighQty > 0)) return toast.error('Enter how much is being sold.')
+    if (mode === 'set') {
+      if (setQty(product.id, weighQty) !== null) setWeighing(null)
+      return undefined
+    }
+    if (available(product) < weighQty) {
+      return toast.error(`Only ${formatQty(available(product), product.unit)} of ${product.name} left.`)
+    }
+    addToCart(product, weighQty)
+    setWeighing(null)
+    scanRef.current?.focus()
+    return undefined
+  }
 
   /** Keyboard-wedge scanners type the code then press Enter. */
   const onScan = async (e) => {
@@ -110,13 +164,61 @@ export default function POS() {
     }
   }
 
+  /**
+   * Sets a line's quantity, in the product's own unit. Pieces are whole numbers
+   * (at least 1); weighed goods take decimals down to 0.001. Returns the value
+   * kept, or null when the input was refused.
+   */
   const setQty = (productId, qty) => {
     const line = cart.find((c) => c.productId === productId)
-    if (!line) return
-    const wanted = Math.max(1, Number(qty) || 1)
+    if (!line) return null
+    const measured = isMeasured(line.unit)
+    const n = Number(qty)
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error('Quantity must be more than zero.')
+      return null
+    }
+    const wanted = measured ? roundQty(n) : Math.max(1, Math.round(n))
     const capped = Math.min(wanted, line.stock || 9999)
-    if (capped < wanted) toast.error(`Only ${line.stock} in stock.`)
+    if (capped < wanted) toast.error(`Only ${formatQty(line.stock, line.unit)} in stock.`)
     setCart((list) => list.map((c) => (c.productId === productId ? { ...c, qty: capped } : c)))
+    return capped
+  }
+
+  /**
+   * Changes the selling price for this bill only (the product keeps its price).
+   * Selling below cost is allowed — the line just shows a "Below cost" warning.
+   * Returns the price kept, or null when refused.
+   */
+  const setPrice = (productId, value) => {
+    const line = cart.find((c) => c.productId === productId)
+    if (!line) return null
+    const n = Math.round((Number(value) || 0) * 100) / 100
+    if (!(n > 0)) {
+      toast.error('Price must be more than zero.')
+      return null
+    }
+    setCart((list) => list.map((c) => (c.productId === productId ? { ...c, price: n } : c)))
+    return n
+  }
+
+  /**
+   * Sets what a whole line sells for — what the 600 g or the 3 pcs cost. The
+   * unit price is worked back from it (kept to 6 decimals so the line comes out
+   * at exactly the typed amount). Below cost is allowed, with a warning on the
+   * line. Returns the amount kept, or null when refused.
+   */
+  const setLineAmount = (productId, value) => {
+    const line = cart.find((c) => c.productId === productId)
+    if (!line || !(line.qty > 0)) return null
+    const amount = Math.round((Number(value) || 0) * 100) / 100
+    if (!(amount > 0)) {
+      toast.error('Price must be more than zero.')
+      return null
+    }
+    const price = Math.round((amount / line.qty) * 1e6) / 1e6
+    setCart((list) => list.map((c) => (c.productId === productId ? { ...c, price } : c)))
+    return amount
   }
 
   const setLineDiscount = (productId, patch) => {
@@ -276,9 +378,12 @@ export default function POS() {
                     return (
                       <button key={p.id} type="button" className="tile" onClick={() => addToCart(p)} disabled={left <= 0}>
                         <div className="tile-name">{p.name}</div>
-                        <div className="tile-price">{money(p.price, currency)}</div>
+                        <div className="tile-price">
+                          {money(p.price, currency)}
+                          {isMeasured(p.unit) && <span className="tile-per"> / {p.unit}</span>}
+                        </div>
                         <div className="tile-stock">
-                          {left > 0 ? `${left} ${p.unit || 'pcs'} available` : 'Out of stock'}
+                          {left > 0 ? `${formatQty(left, p.unit || 'pcs')} available` : 'Out of stock'}
                         </div>
                       </button>
                     )
@@ -317,17 +422,39 @@ export default function POS() {
                       <div className="cart-line-top">
                         <div className="cart-line-name">
                           {item.name}
-                          <div className="cell-sub">{money(item.price, currency)} each</div>
+                          {/* Every item: edit the selling amount for this line (3 pcs → 160, 600 g → 650). */}
+                          <div className="price-edit" title="Selling amount for this line, this bill only.">
+                            <span>{currency}</span>
+                            <NumberInput value={lineGross(item)} onCommit={(v) => setLineAmount(item.productId, v)}
+                              aria-label={`Selling amount for ${formatQty(item.qty, item.unit)}`} />
+                            <span>for {formatQty(item.qty, item.unit)}</span>
+                            {item.price !== item.listPrice && (
+                              <button type="button" className="price-reset"
+                                title="Back to the normal price"
+                                onClick={() => setPrice(item.productId, item.listPrice)}>
+                                was {money(Math.round(item.listPrice * item.qty * 100) / 100, currency)} ↺
+                              </button>
+                            )}
+                          </div>
+                          {!isMeasured(item.unit) && item.qty > 1 && (
+                            <div className="cell-sub">{money(item.price, currency)} {perUnit(item.unit)}</div>
+                          )}
+                          {/* Warns without revealing the cost figure — the sale can still go ahead. */}
+                          {belowCost(item) && <div className="below-cost">⚠ Below cost</div>}
                         </div>
-                        <div className="qty-box">
-                          <button type="button" onClick={() => setQty(item.productId, item.qty - 1)}>−</button>
-                          <input
-                            value={item.qty}
-                            onChange={(e) => setQty(item.productId, e.target.value)}
-                            inputMode="numeric"
-                          />
-                          <button type="button" onClick={() => setQty(item.productId, item.qty + 1)}>+</button>
-                        </div>
+                        {isMeasured(item.unit) ? (
+                          <button type="button" className="weigh-btn" title="Change amount"
+                            onClick={() => openWeigh({ id: item.productId, name: item.name, unit: item.unit, price: item.price }, 'set')}>
+                            ⚖ {formatQty(item.qty, item.unit)}
+                          </button>
+                        ) : (
+                          <div className="qty-box">
+                            <button type="button" onClick={() => setQty(item.productId, item.qty - 1)}>−</button>
+                            <NumberInput value={item.qty} onCommit={(v) => setQty(item.productId, v)}
+                              inputMode="numeric" aria-label="Quantity" />
+                            <button type="button" onClick={() => setQty(item.productId, item.qty + 1)}>+</button>
+                          </div>
+                        )}
                         <button type="button" className="btn btn-icon" onClick={() => removeLine(item.productId)}
                           title="Remove">🗑</button>
                       </div>
@@ -477,6 +604,53 @@ export default function POS() {
         </Modal>
       )}
 
+      {weighing && (
+        <Modal
+          title={weighing.product.name}
+          subtitle={`${money(weighPrice, currency)} per ${weighing.product.unit}`}
+          onClose={() => setWeighing(null)}
+          footer={
+            <>
+              <button type="button" className="btn btn-ghost" onClick={() => setWeighing(null)}>Cancel</button>
+              <button type="submit" form="weigh-form" className="btn btn-success" disabled={!(weighQty > 0)}>
+                {weighing.mode === 'set' ? 'Update' : 'Add to bill'}
+                {weighQty > 0 && ` — ${money(Math.round(weighQty * weighPrice * 100) / 100, currency)}`}
+              </button>
+            </>
+          }
+        >
+          <form id="weigh-form" onSubmit={confirmWeigh}>
+            <Field label="How much?">
+              <div className="row" style={{ gap: 8 }}>
+                <input
+                  type="number" step="any" min="0" className="input-lg mono" autoFocus
+                  value={weighAmount} onChange={(e) => setWeighAmount(e.target.value)} placeholder="0"
+                />
+                <select value={weighUnit} onChange={(e) => setWeighUnit(e.target.value)} style={{ flex: 'none', width: 100 }}>
+                  {entryUnits(weighing.product.unit).map((o) => <option key={o.unit} value={o.unit}>{o.unit}</option>)}
+                </select>
+              </div>
+            </Field>
+            <div className="flex gap-2 wrap">
+              {quickAmounts(weighing.product.unit).map((a) => {
+                const unit = entryUnits(weighing.product.unit)[0].unit
+                return (
+                  <button key={a} type="button" className="btn btn-ghost btn-sm"
+                    onClick={() => { setWeighUnit(unit); setWeighAmount(String(a)) }}>
+                    {formatQty(toProductUnit(a, unit, weighing.product.unit), weighing.product.unit)}
+                  </button>
+                )
+              })}
+            </div>
+            {weighQty > 0 && (
+              <p className="text-sm text-muted mt-3" style={{ marginBottom: 0 }}>
+                = {weighQty} {weighing.product.unit} taken off stock
+              </p>
+            )}
+          </form>
+        </Modal>
+      )}
+
       {/* Kept mounted after the modal closes so "Last bill" can reprint it. */}
       {lastSale && <ReceiptPortal sale={lastSale} shop={shop} />}
 
@@ -501,4 +675,41 @@ export default function POS() {
       )}
     </>
   )
+}
+
+/**
+ * Number box that lets the cashier finish typing ("0.", "12") before the value
+ * is checked. Commits on Enter or when focus leaves; a refused value snaps back.
+ */
+function NumberInput({ value, onCommit, ...props }) {
+  const [text, setText] = useState(String(value))
+  useEffect(() => { setText(String(value)) }, [value])
+
+  const commit = () => {
+    if (text.trim() === '' || Number(text) === Number(value)) {
+      setText(String(value))
+      return
+    }
+    const kept = onCommit(text)
+    setText(String(kept ?? value))
+  }
+
+  return (
+    <input
+      inputMode="decimal"
+      {...props}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }}
+      onFocus={(e) => e.target.select()}
+    />
+  )
+}
+
+/** True when a line, after its own discount, sells for less than it cost. */
+function belowCost(item) {
+  const cost = Number(item.cost) || 0
+  if (cost <= 0) return false
+  return lineNet(item) < Math.round(cost * (Number(item.qty) || 0) * 100) / 100
 }

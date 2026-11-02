@@ -503,6 +503,23 @@ tbody tr:hover { background: var(--surface-2); }
 }
 .qty-box input:focus { box-shadow: none; }
 .disc-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+
+/* Editable unit price on a bill line. */
+.price-edit { display: flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11.5px; font-weight: 400; color: var(--text-3); flex-wrap: wrap; }
+.price-edit input { width: 78px; padding: 2px 6px; font-size: 12px; text-align: right; }
+.price-reset {
+  border: none; background: var(--amber-soft); color: var(--amber); border-radius: 5px;
+  font-size: 10.5px; padding: 2px 6px; cursor: pointer; font-family: inherit;
+}
+/* Weighed item amount — opens the weigh screen. */
+.weigh-btn {
+  border: 1px solid var(--border-strong); background: var(--surface-2); border-radius: 7px;
+  padding: 5px 9px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  color: var(--text); font-family: inherit;
+}
+.weigh-btn:hover { background: var(--border); }
+.tile-per { font-size: 11px; font-weight: 400; color: var(--text-3); }
+.below-cost { margin-top: 3px; font-size: 11px; font-weight: 600; color: var(--red); }
 .disc-row select, .disc-row input { padding: 5px 8px; font-size: 12px; }
 .disc-row select { width: 78px; flex: none; }
 .totals-row {

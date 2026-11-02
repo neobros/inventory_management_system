@@ -6,6 +6,8 @@
  * remains, then tax on the discounted figure.
  */
 
+import { isMeasured } from './units.js'
+
 const round = (n) => Math.round((Number(n) || 0) * 100) / 100
 
 export function lineGross(item) {
@@ -48,6 +50,7 @@ export function calcTotals(items, { billDiscountType = 'amount', billDiscountVal
     taxable,
     tax,
     total,
-    itemCount: items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0),
+    // A weighed line counts as one item: 0.2 kg of rice is one thing in the bag.
+    itemCount: items.reduce((sum, i) => sum + (isMeasured(i.unit) ? 1 : (Number(i.qty) || 0)), 0),
   }
 }
