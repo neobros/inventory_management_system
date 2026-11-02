@@ -21,6 +21,8 @@ import AdminShops from './pages/admin/AdminShops'
 import AdminOverview from './pages/admin/AdminOverview'
 import AdminRelease from './pages/admin/AdminRelease'
 import AdminImport from './pages/admin/AdminImport'
+import AdminDeleteProducts from './pages/admin/AdminDeleteProducts'
+import AdminDuplicates from './pages/admin/AdminDuplicates'
 import UpdateGate from './components/UpdateGate'
 import TitleBar from './components/TitleBar'
 
@@ -150,6 +152,8 @@ export default function App() {
 
               <Route path="/admin" element={<Guard allow={['superadmin']}><AdminShops /></Guard>} />
               <Route path="/admin/overview" element={<Guard allow={['superadmin']}><AdminOverview /></Guard>} />
+              <Route path="/admin/duplicates" element={<Guard allow={['superadmin']}><AdminDuplicates /></Guard>} />
+              <Route path="/admin/delete-products" element={<Guard allow={['superadmin']}><AdminDeleteProducts /></Guard>} />
               <Route path="/admin/import" element={<Guard allow={['superadmin']}><AdminImport /></Guard>} />
               <Route path="/admin/release" element={<Guard allow={['superadmin']}><AdminRelease /></Guard>} />
             </Route>

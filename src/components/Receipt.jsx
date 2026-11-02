@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import Barcode from './Barcode'
 import { money, formatDate } from '../utils/format'
+import { formatQty, isMeasured, cleanPrice } from '../utils/units'
 
 const WIDTH_CLASS = { '58mm': 'w58', '75mm': 'w75', '80mm': '', A4: 'wa4' }
 
@@ -51,7 +52,12 @@ export function ReceiptBody({ sale, shop }) {
               <td colSpan={4} style={{ padding: 0 }}>
                 <div className="receipt-item-name">{item.name}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{item.qty} {item.unit || 'pcs'} × {money(item.price, cur)}</span>
+                  {/* Weighed goods show only the amount bought ("600 g"), not the per-kg rate. */}
+                  <span>
+                    {isMeasured(item.unit) || !cleanPrice(item.price)
+                      ? formatQty(item.qty, item.unit || 'pcs')
+                      : `${formatQty(item.qty, item.unit || 'pcs')} × ${money(item.price, cur)}`}
+                  </span>
                   <span>{money(item.gross, cur)}</span>
                 </div>
                 {item.discount > 0 && (

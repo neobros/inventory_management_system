@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { calcTotals, lineGross, lineDiscount, lineNet } from '../utils/cart'
+import { roundQty } from '../utils/units'
 
 export function salesRef(shopId) {
   return collection(db, 'shops', shopId, 'sales')
@@ -34,7 +35,8 @@ export async function createSale(shopId, { items, billDiscountType, billDiscount
     productSnaps.forEach((snap, idx) => {
       if (!snap.exists()) return
       const current = Number(snap.data().stock) || 0
-      tx.update(snap.ref, { stock: current - (Number(items[idx].qty) || 0) })
+      // Decimal for weighed goods (0.2 kg); rounded so stock never shows 4.79999.
+      tx.update(snap.ref, { stock: roundQty(current - (Number(items[idx].qty) || 0)) })
     })
 
     tx.set(counterRef, { invoice: next }, { merge: true })
@@ -47,7 +49,10 @@ export async function createSale(shopId, { items, billDiscountType, billDiscount
         barcode: i.barcode || '',
         unit: i.unit || 'pcs',
         price: Number(i.price) || 0,
-        qty: Number(i.qty) || 0,
+        // Kept when the cashier changed the price, so the change is on record.
+        listPrice: Number(i.listPrice ?? i.price) || 0,
+        priceChanged: (Number(i.listPrice ?? i.price) || 0) !== (Number(i.price) || 0),
+        qty: roundQty(i.qty),
         discountType: i.discountType || 'amount',
         discountValue: Number(i.discountValue) || 0,
         gross: lineGross(i),
@@ -73,6 +78,7 @@ export async function createSale(shopId, { items, billDiscountType, billDiscount
         productId: items[idx].productId,
         productName: items[idx].name,
         barcode: items[idx].barcode || '',
+        unit: items[idx].unit || 'pcs',
         type: 'sale',
         quantity: Number(items[idx].qty) || 0,
         note: `Invoice #${next}`,

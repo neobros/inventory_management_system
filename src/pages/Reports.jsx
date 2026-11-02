@@ -271,7 +271,7 @@ export default function Reports() {
                     <div key={c.name} className="mb-3">
                       <div className="flex text-sm" style={{ justifyContent: 'space-between' }}>
                         <span>{c.name}</span>
-                        <span className="strong">{money(c.revenue, currency)} · {num(c.qty)} sold</span>
+                        <span className="strong">{money(c.revenue, currency)} · {num(c.qty, 3)} sold</span>
                       </div>
                       <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 999, marginTop: 5 }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: 'var(--brand)', borderRadius: 999 }} />
@@ -331,7 +331,7 @@ export default function Reports() {
                             {i.barcode && <div className="cell-sub mono">{i.barcode}</div>}
                           </td>
                           <td className="text-sm">{i.category}</td>
-                          <td className="num">{num(i.qty)}</td>
+                          <td className="num">{num(i.qty, 3)}</td>
                           <td className="num strong">{money(i.revenue, currency)}</td>
                           <td className="num text-muted">{money(i.cost, currency)}</td>
                           <td className={`num ${i.profit < 0 ? 'text-red' : 'text-green'}`}>

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { listProducts, listMovements, adjustStock } from '../services/products'
-import { formatDate, num } from '../utils/format'
+import { formatDate } from '../utils/format'
 import { normaliseScan } from '../utils/barcode'
+import { entryUnits, formatQty, isMeasured, roundQty, toProductUnit } from '../utils/units'
 import { Modal, Field, Empty, Loading, StockBadge } from '../components/ui'
 import Pagination, { usePagination } from '../components/Pagination'
 
@@ -42,8 +43,13 @@ export default function Stock() {
 
   useEffect(() => { load() }, [load])
 
+  /**
+   * Weighed goods default to their own unit (kg) but can be entered in the
+   * other one (g); the amount is converted before it touches the stock.
+   */
   const openFor = (product, type = 'in') => {
-    setForm({ product, type, quantity: '', note: '' })
+    const unit = product.unit || 'pcs'
+    setForm({ product, type, quantity: '', entryUnit: unit, note: '' })
   }
 
   /** Scanning a barcode on this screen jumps straight to a stock-in entry. */
@@ -59,12 +65,17 @@ export default function Stock() {
 
   const submit = async (e) => {
     e.preventDefault()
-    const qty = Number(form.quantity)
-    if (!Number.isFinite(qty) || (form.type !== 'adjust' && qty <= 0)) {
+    const unit = form.product.unit || 'pcs'
+    const typed = Number(form.quantity)
+    if (form.quantity === '' || !Number.isFinite(typed) || typed < 0 || (form.type !== 'adjust' && typed <= 0)) {
       return toast.error('Enter a quantity greater than zero.')
     }
-    if (form.type === 'out' && qty > Number(form.product.stock || 0)) {
-      return toast.error(`Only ${form.product.stock} in stock.`)
+    if (!isMeasured(unit) && !Number.isInteger(typed)) {
+      return toast.error(`${unit} must be a whole number. Use kg, g, litre, ml or metre for part amounts.`)
+    }
+    const qty = toProductUnit(typed, form.entryUnit, unit)
+    if (form.type === 'out' && qty > roundQty(form.product.stock)) {
+      return toast.error(`Only ${formatQty(form.product.stock, unit)} in stock.`)
     }
 
     setSaving(true)
@@ -106,6 +117,12 @@ export default function Stock() {
 
   const pager = usePagination(rows, 50)
 
+  // Older movements did not store a unit; fall back to the product's.
+  const unitOf = useMemo(() => {
+    const map = new Map(products.map((p) => [p.id, p.unit || 'pcs']))
+    return (m) => m.unit || map.get(m.productId) || 'pcs'
+  }, [products])
+
   if (loading) return <Loading label="Loading stock movements…" />
 
   return (
@@ -139,7 +156,7 @@ export default function Stock() {
                     <tr key={p.id}>
                       <td className="cell-title">{p.name}</td>
                       <td className="mono text-sm">{p.barcode || '—'}</td>
-                      <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} /></td>
+                      <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} unit={p.unit} /></td>
                       <td className="num nowrap">
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'in')}>+ In</button>{' '}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'out')}>− Out</button>{' '}
@@ -183,7 +200,7 @@ export default function Stock() {
                         <td className="text-sm text-muted nowrap">{formatDate(m.createdAt)}</td>
                         <td className="cell-title">{m.productName}</td>
                         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
-                        <td className="num strong">{meta.sign}{num(Math.abs(m.quantity))}</td>
+                        <td className="num strong nowrap">{meta.sign}{formatQty(Math.abs(m.quantity), unitOf(m))}</td>
                         <td className="text-sm text-muted">{m.note || '—'}</td>
                         <td className="text-sm">{m.actor || '—'}</td>
                       </tr>
@@ -200,7 +217,7 @@ export default function Stock() {
       {form && (
         <Modal
           title={form.product.name}
-          subtitle={`Currently ${form.product.stock ?? 0} ${form.product.unit || 'pcs'} in stock`}
+          subtitle={`Currently ${formatQty(form.product.stock ?? 0, form.product.unit || 'pcs')} in stock`}
           onClose={() => setForm(null)}
           footer={
             <>
@@ -225,13 +242,29 @@ export default function Stock() {
               required
               hint={form.type === 'adjust' ? 'The stock level will be set to exactly this number.' : undefined}
             >
-              <input
-                type="number" step="1" min="0" className="input-lg"
-                value={form.quantity}
-                onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
-                autoFocus required
-              />
+              <div className="row" style={{ gap: 8 }}>
+                <input
+                  type="number" min="0" className="input-lg"
+                  step={isMeasured(form.product.unit) ? 'any' : '1'}
+                  value={form.quantity}
+                  onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+                  placeholder={isMeasured(form.product.unit) ? 'e.g. 0.5' : '0'}
+                  autoFocus required
+                />
+                <select value={form.entryUnit} style={{ flex: 'none', width: 100 }}
+                  onChange={(e) => setForm((f) => ({ ...f, entryUnit: e.target.value }))}
+                  disabled={!isMeasured(form.product.unit)}>
+                  {[...entryUnits(form.product.unit)].reverse().map((o) => (
+                    <option key={o.unit} value={o.unit}>{o.unit}</option>
+                  ))}
+                </select>
+              </div>
             </Field>
+            {isMeasured(form.product.unit) && Number(form.quantity) > 0 && form.entryUnit !== form.product.unit && (
+              <p className="text-sm text-muted" style={{ marginTop: -8 }}>
+                = {toProductUnit(form.quantity, form.entryUnit, form.product.unit)} {form.product.unit}
+              </p>
+            )}
 
             <Field label="Note" hint="Supplier name, invoice number, reason for wastage…">
               <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}

@@ -1,3 +1,4 @@
+import { formatQty } from '../utils/units'
 import { useEffect } from 'react'
 
 export function Modal({ title, subtitle, children, footer, onClose, wide = false }) {
@@ -101,9 +102,9 @@ export function Stat({ label, value, foot, icon, tone = 'brand' }) {
 }
 
 /** Stock level shown as a colour-coded pill against the product's reorder point. */
-export function StockBadge({ stock, lowAt = 0 }) {
+export function StockBadge({ stock, lowAt = 0, unit = 'pcs' }) {
   const n = Number(stock) || 0
   if (n <= 0) return <span className="badge badge-red">Out of stock</span>
-  if (lowAt > 0 && n <= lowAt) return <span className="badge badge-amber">Low · {n}</span>
-  return <span className="badge badge-green">{n} in stock</span>
+  if (lowAt > 0 && n <= lowAt) return <span className="badge badge-amber">Low · {formatQty(n, unit)}</span>
+  return <span className="badge badge-green">{formatQty(n, unit)} in stock</span>
 }

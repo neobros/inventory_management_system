@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { generateBarcode } from '../utils/barcode'
+import { roundQty } from '../utils/units'
 
 export function productsRef(shopId) {
   return collection(db, 'shops', shopId, 'products')
@@ -42,7 +43,30 @@ export async function barcodeExists(shopId, barcode, exceptId) {
   return snap.docs.some((d) => d.id !== exceptId)
 }
 
+export async function skuExists(shopId, sku, exceptId) {
+  const snap = await getDocs(query(productsRef(shopId), where('sku', '==', sku), limit(2)))
+  return snap.docs.some((d) => d.id !== exceptId)
+}
+
+/**
+ * SKU and barcode are unique within one shop (other shops may reuse them).
+ * Throws a readable message when either is already taken by another product.
+ */
+export async function assertUniqueCodes(shopId, { sku, barcode }, exceptId) {
+  const s = (sku || '').trim()
+  const b = (barcode || '').trim()
+  const [skuTaken, barcodeTaken] = await Promise.all([
+    s ? skuExists(shopId, s, exceptId) : false,
+    b ? barcodeExists(shopId, b, exceptId) : false,
+  ])
+  if (skuTaken && barcodeTaken) throw new Error(`SKU "${s}" and barcode "${b}" are already used by other products in this shop.`)
+  if (skuTaken) throw new Error(`SKU / item code "${s}" is already used by another product in this shop.`)
+  if (barcodeTaken) throw new Error(`Barcode "${b}" is already used by another product in this shop.`)
+}
+
 export async function createProduct(shopId, data, actor = 'system') {
+  await assertUniqueCodes(shopId, data)
+
   let barcode = (data.barcode || '').trim()
   if (!barcode) {
     // Retry a couple of times so a rare collision cannot produce a duplicate.
@@ -63,8 +87,8 @@ export async function createProduct(shopId, data, actor = 'system') {
     unit: data.unit || 'pcs',
     cost: Number(data.cost) || 0,
     price: Number(data.price) || 0,
-    stock: Number(data.stock) || 0,
-    lowStockAt: Number(data.lowStockAt) || 0,
+    stock: roundQty(data.stock),
+    lowStockAt: roundQty(data.lowStockAt),
     supplier: (data.supplier || '').trim(),
     active: data.active !== false,
     createdAt: serverTimestamp(),
@@ -77,6 +101,7 @@ export async function createProduct(shopId, data, actor = 'system') {
     await logMovement(shopId, {
       productId: ref.id,
       productName: payload.name,
+      unit: payload.unit,
       type: 'in',
       quantity: payload.stock,
       note: 'Opening stock',
@@ -90,6 +115,12 @@ export async function updateProduct(shopId, id, data) {
   const payload = { ...data, updatedAt: serverTimestamp() }
   delete payload.id
   delete payload.createdAt
+  // Only checked when the edit touches them — stock updates from a sale skip this.
+  if ('sku' in payload) payload.sku = String(payload.sku || '').trim()
+  if ('barcode' in payload) payload.barcode = String(payload.barcode || '').trim()
+  if ('sku' in payload || 'barcode' in payload) {
+    await assertUniqueCodes(shopId, { sku: payload.sku, barcode: payload.barcode }, id)
+  }
   await updateDoc(doc(db, 'shops', shopId, 'products', id), payload)
 }
 
@@ -113,15 +144,17 @@ export async function adjustStock(shopId, product, { type, quantity, note, actor
   let delta = qty
   if (type === 'out') delta = -qty
   if (type === 'adjust') delta = qty - (Number(product.stock) || 0)
+  delta = roundQty(delta)
 
   batch.update(ref, { stock: increment(delta), updatedAt: serverTimestamp() })
   batch.set(doc(movementsRef(shopId)), {
     productId: product.id,
     productName: product.name,
     barcode: product.barcode || '',
+    unit: product.unit || 'pcs',
     type,
     quantity: type === 'adjust' ? delta : qty,
-    balanceHint: (Number(product.stock) || 0) + delta,
+    balanceHint: roundQty((Number(product.stock) || 0) + delta),
     note: note || '',
     actor: actor || 'system',
     createdAt: serverTimestamp(),

@@ -16,6 +16,7 @@ import {
   query, orderBy, limit, where,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import { roundQty } from '../utils/units'
 
 export function returnsRef(shopId) {
   return collection(db, 'shops', shopId, 'returns')
@@ -34,7 +35,7 @@ export function returnedMap(sale) {
 /** Quantity of a line still available to return. */
 export function returnableQty(sale, item) {
   const already = Number(returnedMap(sale)[item.productId]) || 0
-  return Math.max(0, (Number(item.qty) || 0) - already)
+  return Math.max(0, roundQty((Number(item.qty) || 0) - already))
 }
 
 export function isFullyReturned(sale) {
@@ -53,7 +54,8 @@ export function calcRefund(sale, lines) {
   const taxRate = Number(sale?.taxRate) || 0
 
   const subtotal = lines.reduce((sum, l) => {
-    const unitNet = (Number(l.item.net) || 0) / Math.max(1, Number(l.item.qty) || 1)
+    // Not Math.max(1, qty): a 0.2 kg line would refund a fifth of what it should.
+    const unitNet = (Number(l.item.net) || 0) / (Number(l.item.qty) || 1)
     return sum + unitNet * l.qty
   }, 0)
 
@@ -101,7 +103,7 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
     picked.forEach((l) => {
       const done = Number(already[l.item.productId]) || 0
       const sold = Number(l.item.qty) || 0
-      if (done + l.qty > sold) {
+      if (roundQty(done + l.qty) > roundQty(sold)) {
         throw new Error(`${l.item.name} has already been returned on this bill.`)
       }
     })
@@ -111,12 +113,12 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
     productSnaps.forEach((snap, idx) => {
       if (!snap.exists()) return // product deleted since the sale; skip restocking
       const stock = Number(snap.data().stock) || 0
-      tx.update(snap.ref, { stock: stock + (Number(picked[idx].qty) || 0) })
+      tx.update(snap.ref, { stock: roundQty(stock + (Number(picked[idx].qty) || 0)) })
     })
 
     const updatedReturned = { ...already }
     picked.forEach((l) => {
-      updatedReturned[l.item.productId] = (Number(updatedReturned[l.item.productId]) || 0) + l.qty
+      updatedReturned[l.item.productId] = roundQty((Number(updatedReturned[l.item.productId]) || 0) + l.qty)
     })
 
     const fullyReturned = (current.items || []).every(
@@ -137,7 +139,7 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
         unit: l.item.unit || 'pcs',
         price: Number(l.item.price) || 0,
         qty: l.qty,
-        net: round(((Number(l.item.net) || 0) / Math.max(1, Number(l.item.qty) || 1)) * l.qty),
+        net: round(((Number(l.item.net) || 0) / (Number(l.item.qty) || 1)) * l.qty),
       })),
       subtotal: refund.subtotal,
       tax: refund.tax,

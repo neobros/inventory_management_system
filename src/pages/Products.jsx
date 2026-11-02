@@ -3,10 +3,11 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import {
   listProducts, createProduct, updateProduct, deleteProduct,
-  listCategories, createCategory, barcodeExists,
+  listCategories, createCategory,
 } from '../services/products'
 import { generateBarcode } from '../utils/barcode'
 import { money } from '../utils/format'
+import { isMeasured } from '../utils/units'
 import { printLabels, nextFrame } from '../utils/print'
 import { Modal, ConfirmDialog, Field, Empty, Loading, StockBadge } from '../components/ui'
 import Pagination, { usePagination } from '../components/Pagination'
@@ -76,9 +77,24 @@ export default function Products() {
 
     setSaving(true)
     try {
+      // SKU and barcode must be unique in this shop. This catches "abc-1" vs
+      // "ABC-1" from the loaded list; the save itself re-checks the database.
+      const exceptId = editing === 'new' ? undefined : editing.id
+      const sku = form.sku.trim().toLowerCase()
       const code = form.barcode.trim()
-      if (code && await barcodeExists(shopId, code, editing === 'new' ? undefined : editing.id)) {
-        toast.error('Another product already uses that barcode.')
+      const clash = products.find((p) => p.id !== exceptId && (
+        (sku && (p.sku || '').trim().toLowerCase() === sku) || (code && (p.barcode || '').trim() === code)
+      ))
+      if (!isMeasured(form.unit)) {
+        const whole = (v) => v === '' || Number.isInteger(Number(v))
+        if ((editing === 'new' && !whole(form.stock)) || !whole(form.lowStockAt)) {
+          toast.error(`${form.unit} must be whole numbers. Use kg, g, litre, ml or metre for part amounts.`)
+          return
+        }
+      }
+      if (clash) {
+        const what = sku && (clash.sku || '').trim().toLowerCase() === sku ? `SKU "${clash.sku}"` : `Barcode "${code}"`
+        toast.error(`${what} is already used by "${clash.name}".`)
         return
       }
 
@@ -211,7 +227,7 @@ export default function Products() {
                       <td className="text-sm">{p.category || '—'}</td>
                       <td className="num">{money(p.cost, currency)}</td>
                       <td className="num strong">{money(p.price, currency)}</td>
-                      <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} /></td>
+                      <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} unit={p.unit} /></td>
                       <td className="num nowrap">
                         <button type="button" className="btn btn-icon" title="Print label" onClick={() => printOne(p)}>🏷</button>
                         <button type="button" className="btn btn-icon" title="Edit" onClick={() => openEdit(p)}>✎</button>
@@ -283,19 +299,20 @@ export default function Products() {
             </div>
 
             <div className="row">
-              <Field label={editing === 'new' ? 'Opening stock' : 'Current stock'}>
-                <input type="number" step="1" value={form.stock} onChange={set('stock')}
-                  placeholder="0" disabled={editing !== 'new'} />
-              </Field>
-              <Field label="Unit">
+              <Field label="Unit" hint={isMeasured(form.unit) ? 'Price and stock are per ' + form.unit : undefined}>
                 <select value={form.unit} onChange={set('unit')}>
                   {['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'metre'].map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="Low-stock alert at" hint="Warns below this">
-                <input type="number" step="1" min="0" value={form.lowStockAt} onChange={set('lowStockAt')} placeholder="0" />
+              <Field label={`${editing === 'new' ? 'Opening stock' : 'Current stock'} (${form.unit})`}
+                hint={editing === 'new' && isMeasured(form.unit) ? 'Decimals OK, e.g. 0.5' : undefined}>
+                <input type="number" step={isMeasured(form.unit) ? 'any' : '1'} min="0" value={form.stock} onChange={set('stock')}
+                  placeholder={isMeasured(form.unit) ? '0.5' : '0'} disabled={editing !== 'new'} />
+              </Field>
+              <Field label={`Low-stock alert at (${form.unit})`} hint="Warns below this">
+                <input type="number" step={isMeasured(form.unit) ? 'any' : '1'} min="0" value={form.lowStockAt} onChange={set('lowStockAt')} placeholder="0" />
               </Field>
             </div>
 

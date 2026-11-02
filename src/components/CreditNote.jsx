@@ -2,6 +2,7 @@ import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import Barcode from './Barcode'
 import { money, formatDate } from '../utils/format'
+import { formatQty, isMeasured, cleanPrice } from '../utils/units'
 
 const WIDTH_CLASS = { '58mm': 'w58', '75mm': 'w75', '80mm': '', A4: 'wa4' }
 
@@ -61,8 +62,8 @@ export function CreditNoteBody({ note, shop }) {
                 <td className="receipt-item-name" colSpan={3}>{item.name}</td>
               </tr>
               <tr>
-                <td>{item.qty} {item.unit} × {money(item.price, cur)}</td>
-                <td className="r">{item.qty}</td>
+                <td>{isMeasured(item.unit) || !cleanPrice(item.price) ? formatQty(item.qty, item.unit || 'pcs') : `${formatQty(item.qty, item.unit || 'pcs')} × ${money(item.price, cur)}`}</td>
+                <td className="r">{formatQty(item.qty, item.unit || 'pcs')}</td>
                 <td className="r">{money(item.net, cur)}</td>
               </tr>
             </Fragment>

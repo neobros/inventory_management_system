@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { listSales } from '../services/sales'
 import { money, formatDate, toDate, daysAgo } from '../utils/format'
+import { formatQty, isMeasured, perUnit, roundQty } from '../utils/units'
 import { printBill, nextFrame } from '../utils/print'
 import { createReturn, returnableQty, calcRefund, isFullyReturned } from '../services/returns'
 import { Modal, Field, Empty, Loading } from '../components/ui'
@@ -90,8 +91,18 @@ export default function Sales() {
     setQtys({})
   }
 
-  const setQty = (productId, value, maxQty) => {
-    const n = Math.max(0, Math.min(Number(value) || 0, maxQty))
+  /**
+   * Typed text is kept as-is while it is still a valid partial number ("0.",
+   * "0.2"), so weighed lines can take decimals; anything over what is left is
+   * capped. Pieces are whole numbers.
+   */
+  const setQty = (productId, value, maxQty, measured = false) => {
+    if (typeof value === 'string' && measured && /^\d*\.?\d*$/.test(value) && (Number(value) || 0) <= maxQty) {
+      setQtys((q) => ({ ...q, [productId]: value }))
+      return
+    }
+    const raw = Number(value) || 0
+    const n = Math.max(0, Math.min(measured ? roundQty(raw) : Math.round(raw), maxQty))
     setQtys((q) => ({ ...q, [productId]: n }))
   }
 
@@ -299,24 +310,27 @@ export default function Sales() {
                   const left = returnableQty(returning, item)
                   const back = (Number(item.qty) || 0) - left
                   const picked = Number(qtys[item.productId]) || 0
-                  const unitNet = (Number(item.net) || 0) / Math.max(1, Number(item.qty) || 1)
+                  const unitNet = (Number(item.net) || 0) / (Number(item.qty) || 1)
+                  const measured = isMeasured(item.unit)
                   return (
                     <tr key={item.productId}>
                       <td>
                         <div className="cell-title">{item.name}</div>
-                        <div className="cell-sub">{money(item.price, currency)} each</div>
+                        <div className="cell-sub">{money(item.price, currency)} {perUnit(item.unit)}</div>
                       </td>
-                      <td className="num">{item.qty}</td>
-                      <td className="num">{back || '—'}</td>
+                      <td className="num">{formatQty(item.qty, item.unit || 'pcs')}</td>
+                      <td className="num">{back > 0 ? formatQty(back, item.unit || 'pcs') : '—'}</td>
                       <td className="num">
                         {left === 0 ? (
                           <span className="badge badge-grey">All returned</span>
                         ) : (
                           <div className="qty-box" style={{ marginLeft: 'auto', width: 'fit-content' }}>
-                            <button type="button" onClick={() => setQty(item.productId, picked - 1, left)}>−</button>
-                            <input value={picked}
-                              onChange={(e) => setQty(item.productId, e.target.value, left)} />
-                            <button type="button" onClick={() => setQty(item.productId, picked + 1, left)}>+</button>
+                            {!measured && <button type="button" onClick={() => setQty(item.productId, picked - 1, left)}>−</button>}
+                            <input value={qtys[item.productId] ?? 0} inputMode="decimal"
+                              style={measured ? { width: 64 } : undefined}
+                              onChange={(e) => setQty(item.productId, e.target.value, left, measured)} />
+                            {measured && <span className="text-sm" style={{ padding: '0 6px' }}>{item.unit}</span>}
+                            {!measured && <button type="button" onClick={() => setQty(item.productId, picked + 1, left)}>+</button>}
                           </div>
                         )}
                       </td>
@@ -343,7 +357,7 @@ export default function Sales() {
               <span>
                 Refunding <strong>{money(refund.total, currency)}</strong>
                 {refund.tax > 0 && ` (including ${money(refund.tax, currency)} tax)`} and putting{' '}
-                {returnLines.reduce((n, l) => n + l.qty, 0)} item(s) back into stock.
+                {returnLines.length} item(s) back into stock.
               </span>
             </div>
           )}
