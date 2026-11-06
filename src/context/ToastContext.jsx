@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react'
 
 const ToastContext = createContext(null)
 
@@ -13,11 +13,15 @@ export function ToastProvider({ children }) {
     setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), ms)
   }, [])
 
-  const api = {
-    success: useCallback((m) => push(m, 'ok'), [push]),
-    error: useCallback((m) => push(m, 'err', 4600), [push]),
-    info: useCallback((m) => push(m, ''), [push]),
-  }
+  // Must stay the same object for the life of the app. Pages list `toast` in
+  // their data-loading hooks, so a new object on every render (each time a
+  // message appeared or faded) made every page reload its data — the
+  // "page reloads after Saved!" bug.
+  const api = useMemo(() => ({
+    success: (m) => push(m, 'ok'),
+    error: (m) => push(m, 'err', 4600),
+    info: (m) => push(m, ''),
+  }), [push])
 
   return (
     <ToastContext.Provider value={api}>

@@ -1,7 +1,7 @@
 {
   "name": "inventory-management-system",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Inventory management and point-of-sale till",
   "author": "StockPilot",
   "type": "module",

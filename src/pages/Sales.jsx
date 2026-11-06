@@ -9,7 +9,6 @@ import { createReturn, returnableQty, calcRefund, isFullyReturned } from '../ser
 import { Modal, Field, Empty, Loading } from '../components/ui'
 import Pagination, { usePagination } from '../components/Pagination'
 import ReceiptPortal from '../components/Receipt'
-import CreditNotePortal from '../components/CreditNote'
 
 const RANGES = [
   { key: 'today', label: 'Today', days: 0 },
@@ -19,7 +18,8 @@ const RANGES = [
 ]
 
 export default function Sales() {
-  const { shopId, shop, currency } = useAuth()
+  // profile names the cashier on the return; without it every return crashed.
+  const { shopId, shop, profile, currency } = useAuth()
   const toast = useToast()
 
   const [sales, setSales] = useState([])
@@ -31,16 +31,15 @@ export default function Sales() {
   const [portalSale, setPortalSale] = useState(null)
   const [printingId, setPrintingId] = useState(null)
 
-  // Returns: the bill being returned against, the quantities picked, and the
-  // credit note waiting to be printed once it is saved.
+  // Returns: the bill being returned against and the quantities picked.
   const [returning, setReturning] = useState(null)
   const [qtys, setQtys] = useState({})
   const [reason, setReason] = useState('')
   const [savingReturn, setSavingReturn] = useState(false)
-  const [creditNote, setCreditNote] = useState(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    // No setLoading(true) here: the spinner is for the first load only. Refreshing
+    // after a save must not swap the page for a spinner — that looked like a reload.
     try {
       setSales(await listSales(shopId, { max: 500 }))
     } catch {
@@ -137,37 +136,14 @@ export default function Sales() {
         cashier: { name: profile?.name || profile?.email, uid: profile?.uid },
       })
 
-      const printable = {
-        ...saved,
-        invoiceNo: returning.invoiceNo,
-        type: returnLines.length === returning.items.length
-          && returning.items.every((i) => (qtys[i.productId] || 0) >= returnableQty(returning, i))
-          ? 'void' : 'return',
-        items: returnLines.map((l) => ({
-          productId: l.item.productId,
-          name: l.item.name,
-          unit: l.item.unit || 'pcs',
-          price: Number(l.item.price) || 0,
-          qty: l.qty,
-          net: ((Number(l.item.net) || 0) / Math.max(1, Number(l.item.qty) || 1)) * l.qty,
-        })),
-        taxRate: returning.taxRate || 0,
-        reason,
-        cashierName: profile?.name || profile?.email,
-        createdAt: new Date(),
-      }
-
+      // Nothing is printed after a return — the shop asked for that. The credit
+      // note is still saved and the stock is restored.
+      // Mark the bill as returned on screen instead of re-reading 500 sales.
+      const saleId = returning.id
+      setSales((list) => list.map((s) => (s.id === saleId ? { ...s, ...saved.sale } : s)))
       setReturning(null)
-      setCreditNote(printable)
-      setPortalSale(null)
-      await load()
 
       toast.success(`Credit #${saved.creditNo} — refund ${money(saved.total, currency)}. Stock restored.`)
-
-      // Print the note straight away, the same as a bill.
-      await nextFrame()
-      const how = await printBill(shop)
-      if (how === 'empty') toast.error('The credit note did not render — nothing was printed.')
     } catch (err) {
       toast.error(err.message || 'Could not save the return.')
     } finally {
@@ -364,8 +340,7 @@ export default function Sales() {
         </Modal>
       )}
 
-      {portalSale && !creditNote && <ReceiptPortal sale={portalSale} shop={shop} />}
-      {creditNote && <CreditNotePortal note={creditNote} shop={shop} />}
+      {portalSale && <ReceiptPortal sale={portalSale} shop={shop} />}
 
     </>
   )

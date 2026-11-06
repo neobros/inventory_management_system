@@ -147,7 +147,8 @@ export async function adjustStock(shopId, product, { type, quantity, note, actor
   delta = roundQty(delta)
 
   batch.update(ref, { stock: increment(delta), updatedAt: serverTimestamp() })
-  batch.set(doc(movementsRef(shopId)), {
+  const movementRef = doc(movementsRef(shopId))
+  const movement = {
     productId: product.id,
     productName: product.name,
     barcode: product.barcode || '',
@@ -157,9 +158,11 @@ export async function adjustStock(shopId, product, { type, quantity, note, actor
     balanceHint: roundQty((Number(product.stock) || 0) + delta),
     note: note || '',
     actor: actor || 'system',
-    createdAt: serverTimestamp(),
-  })
+  }
+  batch.set(movementRef, { ...movement, createdAt: serverTimestamp() })
   await batch.commit()
+  // What was written, so the screen can update without reading it all back.
+  return { stock: roundQty((Number(product.stock) || 0) + delta), movement: { id: movementRef.id, ...movement, createdAt: new Date() } }
 }
 
 export async function listMovements(shopId, max = 200) {

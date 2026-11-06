@@ -36,7 +36,8 @@ export default function Products() {
   const [labelTarget, setLabelTarget] = useState(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    // No setLoading(true) here: the spinner is for the first load only. Refreshing
+    // after a save must not swap the page for a spinner — that looked like a reload.
     try {
       const [p, c] = await Promise.all([listProducts(shopId), listCategories(shopId)])
       setProducts(p)
@@ -98,27 +99,38 @@ export default function Products() {
         return
       }
 
+      // The list is patched in place below rather than read back from the
+      // database — a re-read cost one read per product on every save.
+      const byName = (a, b) => (a.name || '').localeCompare(b.name || '')
       if (editing === 'new') {
-        await createProduct(shopId, form, profile?.name || profile?.email)
+        const created = await createProduct(shopId, form, profile?.name || profile?.email)
+        const now = new Date()
+        setProducts((list) => [...list, { ...created, createdAt: now, updatedAt: now }].sort(byName))
         toast.success('Product added.')
       } else {
         // Stock is only moved from the Stock Movements screen so every change
         // there leaves an audit trail; editing here keeps the count untouched.
         const { stock, ...rest } = form
-        await updateProduct(shopId, editing.id, {
+        const changes = {
           ...rest,
+          sku: (rest.sku || '').trim(),
+          barcode: (rest.barcode || '').trim(),
           cost: Number(rest.cost) || 0,
           price: Number(rest.price) || 0,
           lowStockAt: Number(rest.lowStockAt) || 0,
-        })
+        }
+        await updateProduct(shopId, editing.id, changes)
+        setProducts((list) => list
+          .map((p) => (p.id === editing.id ? { ...p, ...changes, updatedAt: new Date() } : p))
+          .sort(byName))
         toast.success('Product updated.')
       }
 
       if (form.category && !categories.some((c) => c.name === form.category)) {
-        await createCategory(shopId, form.category)
+        const cat = await createCategory(shopId, form.category)
+        setCategories((list) => [...list, cat].sort(byName))
       }
       setEditing(null)
-      await load()
     } catch (err) {
       toast.error(err.message || 'Could not save the product.')
     } finally {
@@ -129,9 +141,10 @@ export default function Products() {
   const confirmDelete = async () => {
     try {
       await deleteProduct(shopId, deleting.id)
+      const goneId = deleting.id
+      setProducts((list) => list.filter((p) => p.id !== goneId))
       toast.success('Product deleted.')
       setDeleting(null)
-      await load()
     } catch {
       toast.error('Could not delete the product.')
     }

@@ -34,7 +34,8 @@ export default function Staff() {
   const [revealed, setRevealed] = useState({})
 
   const load = useCallback(async () => {
-    setLoading(true)
+    // No setLoading(true) here: the spinner is for the first load only. Refreshing
+    // after a save must not swap the page for a spinner — that looked like a reload.
     try {
       const [list, credentials] = await Promise.all([
         listShopUsers(shopId),

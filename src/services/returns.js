@@ -85,7 +85,7 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
   const counterRef = doc(db, 'shops', shopId, 'meta', 'counters')
   const movementsCol = collection(db, 'shops', shopId, 'movements')
 
-  const creditNo = await runTransaction(db, async (tx) => {
+  const result = await runTransaction(db, async (tx) => {
     // Reads first — a transaction forbids reading after a write.
     const counterSnap = await tx.get(counterRef)
     const saleSnap = await tx.get(saleRef)
@@ -163,6 +163,7 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
         productId: picked[idx].item.productId,
         productName: picked[idx].item.name,
         barcode: picked[idx].item.barcode || '',
+        unit: picked[idx].item.unit || 'pcs',
         type: 'in',
         quantity: Number(picked[idx].qty) || 0,
         note: `Return — credit #${next} (invoice #${sale.invoiceNo})`,
@@ -171,10 +172,21 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
       })
     })
 
-    return next
+    return {
+      next,
+      returnedQty: updatedReturned,
+      refundedTotal: round((Number(current.refundedTotal) || 0) + refund.total),
+      voided: fullyReturned,
+    }
   })
 
-  return { id: returnRef.id, creditNo, ...refund }
+  // The sale's new return state comes back too, so the list can update in place.
+  return {
+    id: returnRef.id,
+    creditNo: result.next,
+    ...refund,
+    sale: { returnedQty: result.returnedQty, refundedTotal: result.refundedTotal, voided: result.voided },
+  }
 }
 
 export async function listReturns(shopId, { max = 500, from } = {}) {

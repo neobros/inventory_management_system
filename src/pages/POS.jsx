@@ -302,8 +302,13 @@ export default function POS() {
         }
       }
 
+      // Take what was sold off the shelf on screen. Re-reading every product
+      // after each sale cost one read per product in the shop, per bill.
+      const sold = new Map(cart.map((c) => [c.productId, Number(c.qty) || 0]))
+      setProducts((list) => list.map((p) => (sold.has(p.id)
+        ? { ...p, stock: roundQty((Number(p.stock) || 0) - sold.get(p.id)) }
+        : p)))
       clearCart()
-      await load()
     } catch (err) {
       toast.error(err.message || 'Could not save the bill.')
     } finally {

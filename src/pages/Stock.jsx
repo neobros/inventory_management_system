@@ -29,7 +29,8 @@ export default function Stock() {
   const [scan, setScan] = useState('')
 
   const load = useCallback(async () => {
-    setLoading(true)
+    // No setLoading(true) here: the spinner is for the first load only. Refreshing
+    // after a save must not swap the page for a spinner — that looked like a reload.
     try {
       const [p, m] = await Promise.all([listProducts(shopId), listMovements(shopId, 250)])
       setProducts(p)
@@ -80,15 +81,19 @@ export default function Stock() {
 
     setSaving(true)
     try {
-      await adjustStock(shopId, form.product, {
+      const done = await adjustStock(shopId, form.product, {
         type: form.type,
         quantity: qty,
         note: form.note,
         actor: profile?.name || profile?.email,
       })
+      // Update the screen from what was written instead of re-reading every
+      // product and the last 250 movements.
+      const id = form.product.id
+      setProducts((list) => list.map((p) => (p.id === id ? { ...p, stock: done.stock } : p)))
+      setMovements((list) => [done.movement, ...list].slice(0, 250))
       toast.success('Stock updated.')
       setForm(null)
-      await load()
     } catch (err) {
       toast.error(err.message || 'Could not update stock.')
     } finally {
