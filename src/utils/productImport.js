@@ -7,10 +7,10 @@
  */
 
 import { generateBarcode, isValidBarcode } from './barcode.js'
-import { isMeasured, roundQty } from './units.js'
+import { isMeasured, normaliseUnit, roundQty } from './units.js'
 
 /** Same list as the Unit dropdown on the Products page. */
-export const UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'metre']
+export const UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'meter', 'feet', 'yard']
 export const MAX_ROWS = 5000
 
 const text = (v) => (v === undefined || v === null ? '' : String(v).trim())
@@ -95,8 +95,8 @@ export function validateImport(rows, existing, categoryMap = {}) {
 
     const cost = num(row, 'costPrice', reasons)
     const price = num(row, 'sellingPrice', reasons, { required: true })
-    const unit = text(row.unit).toLowerCase() || 'pcs'
-    // kg, g, litre, ml and metre can hold part amounts (12.5 kg); pieces cannot.
+    const unit = normaliseUnit(text(row.unit)) || 'pcs'
+    // kg, g, litre, ml, meter, feet and yard can hold part amounts (12.5 kg); pieces cannot.
     const whole = !isMeasured(unit)
     const stock = roundQty(num(row, 'openingStock', reasons, { integer: whole }))
     const lowStockAt = roundQty(num(row, 'lowStockAlertAt', reasons, { integer: whole }))

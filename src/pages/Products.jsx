@@ -7,7 +7,7 @@ import {
 } from '../services/products'
 import { generateBarcode } from '../utils/barcode'
 import { money } from '../utils/format'
-import { isMeasured } from '../utils/units'
+import { isMeasured, normaliseUnit } from '../utils/units'
 import { printLabels, nextFrame } from '../utils/print'
 import { Modal, ConfirmDialog, Field, Empty, Loading, StockBadge } from '../components/ui'
 import Pagination, { usePagination } from '../components/Pagination'
@@ -59,7 +59,7 @@ export default function Products() {
   const openEdit = (p) => {
     setForm({
       name: p.name || '', sku: p.sku || '', barcode: p.barcode || '',
-      category: p.category || '', unit: p.unit || 'pcs',
+      category: p.category || '', unit: normaliseUnit(p.unit) || 'pcs',
       cost: p.cost ?? '', price: p.price ?? '', stock: p.stock ?? '',
       lowStockAt: p.lowStockAt ?? '', supplier: p.supplier || '', active: p.active !== false,
     })
@@ -89,7 +89,7 @@ export default function Products() {
       if (!isMeasured(form.unit)) {
         const whole = (v) => v === '' || Number.isInteger(Number(v))
         if ((editing === 'new' && !whole(form.stock)) || !whole(form.lowStockAt)) {
-          toast.error(`${form.unit} must be whole numbers. Use kg, g, litre, ml or metre for part amounts.`)
+          toast.error(`${form.unit} must be whole numbers. Use kg, g, litre, ml, meter, feet or yard for part amounts.`)
           return
         }
       }
@@ -314,7 +314,7 @@ export default function Products() {
             <div className="row">
               <Field label="Unit" hint={isMeasured(form.unit) ? 'Price and stock are per ' + form.unit : undefined}>
                 <select value={form.unit} onChange={set('unit')}>
-                  {['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'metre'].map((u) => (
+                  {['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'meter', 'feet', 'yard'].map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
                 </select>

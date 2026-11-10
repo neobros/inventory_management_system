@@ -13,7 +13,11 @@ const ENTRY_UNITS = {
   g: [{ unit: 'g', factor: 1 }, { unit: 'kg', factor: 1000 }],
   litre: [{ unit: 'ml', factor: 0.001 }, { unit: 'litre', factor: 1 }],
   ml: [{ unit: 'ml', factor: 1 }, { unit: 'litre', factor: 1000 }],
+  meter: [{ unit: 'cm', factor: 0.01 }, { unit: 'meter', factor: 1 }],
+  // Older products were saved as "metre"; they keep working as meter.
   metre: [{ unit: 'cm', factor: 0.01 }, { unit: 'metre', factor: 1 }],
+  feet: [{ unit: 'inch', factor: 1 / 12 }, { unit: 'feet', factor: 1 }],
+  yard: [{ unit: 'feet', factor: 1 / 3 }, { unit: 'yard', factor: 1 }],
 }
 
 /** One-tap amounts on the weigh screen, in the first entry unit. */
@@ -22,7 +26,16 @@ const QUICK = {
   g: [50, 100, 250, 500, 1000],
   litre: [250, 500, 1000, 2000],
   ml: [100, 250, 500, 1000],
+  meter: [50, 100, 200, 500],
   metre: [50, 100, 200, 500],
+  feet: [6, 12, 24, 36],
+  yard: [1, 3, 6, 9],
+}
+
+/** Old spelling saved on earlier products; shown and re-saved as "meter". */
+export function normaliseUnit(unit) {
+  const u = String(unit || '').trim().toLowerCase()
+  return u === 'metre' ? 'meter' : u
 }
 
 export function isMeasured(unit) {
@@ -60,7 +73,13 @@ export function formatQty(qty, unit = 'pcs') {
   if (unit === 'g' && q >= 1000) return `${trim(q / 1000)} kg`
   if (unit === 'litre' && q > 0 && q < 1) return `${trim(q * 1000)} ml`
   if (unit === 'ml' && q >= 1000) return `${trim(q / 1000)} litre`
-  if (unit === 'metre' && q > 0 && q < 1) return `${trim(q * 100)} cm`
+  if ((unit === 'meter' || unit === 'metre') && q > 0 && q < 1) return `${trim(q * 100)} cm`
+  if (unit === 'metre') return `${trim(q)} meter`
+  // Inches and feet don't divide evenly (1 inch = 0.083 feet), so these show
+  // two decimals — 0.333 yard reads as "1 feet", not "0.999 feet".
+  const two = (n) => String(Math.round(n * 100) / 100)
+  if (unit === 'feet' && q > 0 && q < 1) return `${two(q * 12)} inch`
+  if (unit === 'yard' && q > 0 && q < 1) return `${two(q * 3)} feet`
   return `${trim(q)} ${unit}`
 }
 

@@ -72,7 +72,7 @@ export default function Stock() {
       return toast.error('Enter a quantity greater than zero.')
     }
     if (!isMeasured(unit) && !Number.isInteger(typed)) {
-      return toast.error(`${unit} must be a whole number. Use kg, g, litre, ml or metre for part amounts.`)
+      return toast.error(`${unit} must be a whole number. Use kg, g, litre, ml, meter, feet or yard for part amounts.`)
     }
     const qty = toProductUnit(typed, form.entryUnit, unit)
     if (form.type === 'out' && qty > roundQty(form.product.stock)) {

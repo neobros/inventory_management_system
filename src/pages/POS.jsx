@@ -33,7 +33,7 @@ export default function POS() {
   const [paid, setPaid] = useState('')
   const [customer, setCustomer] = useState('')
 
-  // Weigh screen for kg / g / litre / ml / metre items: { product, mode: 'add' | 'set' }.
+  // Weigh screen for kg / g / litre / ml / meter / feet / yard items: { product, mode: 'add' | 'set' }.
   const [weighing, setWeighing] = useState(null)
   const [weighAmount, setWeighAmount] = useState('')
   const [weighUnit, setWeighUnit] = useState('')
