@@ -13,6 +13,8 @@ import Sales from './pages/Sales'
 import Products from './pages/Products'
 import Labels from './pages/Labels'
 import ItemList from './pages/ItemList'
+import AgentInvoice from './pages/AgentInvoice'
+import Categories from './pages/Categories'
 import Stock from './pages/Stock'
 import Reports from './pages/Reports'
 import Staff from './pages/Staff'
@@ -145,10 +147,12 @@ export default function App() {
               <Route path="/products" element={<Guard allow={MANAGER_ROLES}><Products /></Guard>} />
               <Route path="/labels" element={<Guard allow={MANAGER_ROLES}><Labels /></Guard>} />
               <Route path="/item-list" element={<Guard allow={MANAGER_ROLES}><ItemList /></Guard>} />
+              <Route path="/agent-invoice" element={<Guard allow={MANAGER_ROLES}><AgentInvoice /></Guard>} />
               <Route path="/stock" element={<Guard allow={MANAGER_ROLES}><Stock /></Guard>} />
               <Route path="/reports" element={<Guard allow={MANAGER_ROLES}><Reports /></Guard>} />
               <Route path="/staff" element={<Guard allow={['owner']}><Staff /></Guard>} />
               <Route path="/settings" element={<Guard allow={MANAGER_ROLES}><Settings /></Guard>} />
+              <Route path="/settings/categories" element={<Guard allow={MANAGER_ROLES}><Categories /></Guard>} />
 
               <Route path="/admin" element={<Guard allow={['superadmin']}><AdminShops /></Guard>} />
               <Route path="/admin/overview" element={<Guard allow={['superadmin']}><AdminOverview /></Guard>} />

@@ -6,6 +6,7 @@ import { listProducts } from '../services/products'
 import { listSales } from '../services/sales'
 import { money, num, formatDate, startOfDay, toDate } from '../utils/format'
 import { Stat, Empty, Loading, StockBadge } from '../components/ui'
+import { stockValue as valueAtCost } from '../utils/batches'
 
 export default function Dashboard() {
   const { shopId, currency, shop } = useAuth()
@@ -37,11 +38,13 @@ export default function Dashboard() {
       (p) => p.lowStockAt > 0 && Number(p.stock) <= Number(p.lowStockAt)
     )
     const outOfStock = products.filter((p) => Number(p.stock) <= 0)
-    const stockValue = products.reduce((sum, p) => sum + (Number(p.cost) || 0) * (Number(p.stock) || 0), 0)
+    // Each batch at what it cost, not all stock at one price.
+    const stockValue = products.reduce((sum, p) => sum + valueAtCost(p), 0)
     const retailValue = products.reduce((sum, p) => sum + (Number(p.price) || 0) * (Number(p.stock) || 0), 0)
 
     return {
-      todayRevenue: todaySales.reduce((sum, s) => sum + (Number(s.total) || 0), 0),
+      todayRevenue: todaySales.reduce((sum, s) => sum
+        + Math.max(0, (Number(s.total) || 0) - (Number(s.refundedTotal) || 0)), 0),
       todayBills: todaySales.length,
       todayDiscount: todaySales.reduce((sum, s) => sum + (Number(s.totalDiscount) || 0), 0),
       lowStock, outOfStock, stockValue, retailValue,

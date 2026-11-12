@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { roundQty } from '../utils/units'
+import { batchesOf, addBatch, batchFields, lastCostOf } from '../utils/batches'
 
 export function returnsRef(shopId) {
   return collection(db, 'shops', shopId, 'returns')
@@ -53,14 +54,22 @@ export function isFullyReturned(sale) {
 export function calcRefund(sale, lines) {
   const taxRate = Number(sale?.taxRate) || 0
 
-  const subtotal = lines.reduce((sum, l) => {
+  const linesNet = lines.reduce((sum, l) => {
     // Not Math.max(1, qty): a 0.2 kg line would refund a fifth of what it should.
     const unitNet = (Number(l.item.net) || 0) / (Number(l.item.qty) || 1)
     return sum + unitNet * l.qty
   }, 0)
 
+  // A discount on the whole bill is shared across its lines. Refunding the line
+  // nets alone gave back more than the customer paid, which pushed revenue and
+  // profit below zero after a full return.
+  const billNet = (sale?.items || []).reduce((sum, i) => sum + (Number(i.net) || 0), 0)
+  const taxable = Number(sale?.taxable)
+  const share = billNet > 0 && Number.isFinite(taxable) ? Math.min(1, taxable / billNet) : 1
+
+  const subtotal = round(linesNet * share)
   const tax = round((subtotal * taxRate) / 100)
-  return { subtotal: round(subtotal), tax, total: round(subtotal + tax) }
+  return { subtotal, tax, total: round(subtotal + tax) }
 }
 
 /**
@@ -110,10 +119,26 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
 
     const next = (counterSnap.exists() ? counterSnap.data().credit || 0 : 0) + 1
 
+    // Returned goods go back as a batch at the cost they were sold at, at the
+    // front of the queue so they sell first.
+    const unitCostOf = (l, data) => (l.item.cost !== undefined && l.item.cost !== null
+      ? Number(l.item.cost) || 0
+      : Number(data?.cost) || 0)
+    const working = new Map()
     productSnaps.forEach((snap, idx) => {
       if (!snap.exists()) return // product deleted since the sale; skip restocking
-      const stock = Number(snap.data().stock) || 0
-      tx.update(snap.ref, { stock: roundQty(stock + (Number(picked[idx].qty) || 0)) })
+      const id = picked[idx].item.productId
+      if (!working.has(id)) {
+        const data = snap.data()
+        working.set(id, { ref: snap.ref, data, stock: Number(data.stock) || 0, batches: batchesOf(data) })
+      }
+      const w = working.get(id)
+      const qty = Number(picked[idx].qty) || 0
+      w.batches = addBatch(w.batches, qty, unitCostOf(picked[idx], w.data), { front: true })
+      w.stock = roundQty(w.stock + qty)
+    })
+    working.forEach((w) => {
+      tx.update(w.ref, { stock: w.stock, ...batchFields(w.batches, lastCostOf(w.data)) })
     })
 
     const updatedReturned = { ...already }
@@ -124,6 +149,12 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
     const fullyReturned = (current.items || []).every(
       (i) => (Number(updatedReturned[i.productId]) || 0) >= (Number(i.qty) || 0)
     )
+
+    if (fullyReturned) {
+      const left = round(Math.max(0, (Number(current.total) || 0) - (Number(current.refundedTotal) || 0)))
+      refund.total = left
+      refund.subtotal = round(Math.max(0, left - refund.tax))
+    }
 
     tx.set(counterRef, { credit: next }, { merge: true })
 
@@ -139,6 +170,8 @@ export async function createReturn(shopId, { sale, lines, reason, cashier }) {
         unit: l.item.unit || 'pcs',
         price: Number(l.item.price) || 0,
         qty: l.qty,
+        // Cost of what came back, so the report takes exactly that off.
+        cost: unitCostOf(l, productSnaps[picked.indexOf(l)]?.data()),
         net: round(((Number(l.item.net) || 0) / (Number(l.item.qty) || 1)) * l.qty),
       })),
       subtotal: refund.subtotal,

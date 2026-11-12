@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { listProducts, listMovements, adjustStock } from '../services/products'
-import { formatDate } from '../utils/format'
+import { formatDate, money } from '../utils/format'
 import { normaliseScan } from '../utils/barcode'
 import { entryUnits, formatQty, isMeasured, roundQty, toProductUnit } from '../utils/units'
 import { Modal, Field, Empty, Loading, StockBadge } from '../components/ui'
+import { batchesOf, lastCostOf } from '../utils/batches'
 import Pagination, { usePagination } from '../components/Pagination'
 
 const TYPE_META = {
@@ -16,7 +17,7 @@ const TYPE_META = {
 }
 
 export default function Stock() {
-  const { shopId, profile } = useAuth()
+  const { shopId, profile, currency } = useAuth()
   const toast = useToast()
 
   const [products, setProducts] = useState([])
@@ -50,7 +51,11 @@ export default function Stock() {
    */
   const openFor = (product, type = 'in') => {
     const unit = product.unit || 'pcs'
-    setForm({ product, type, quantity: '', entryUnit: unit, note: '' })
+    setForm({
+      product, type, quantity: '', entryUnit: unit, note: '',
+      // Prefilled with what was paid last time and today's selling price.
+      cost: String(lastCostOf(product)), price: String(product.price ?? ''),
+    })
   }
 
   /** Scanning a barcode on this screen jumps straight to a stock-in entry. */
@@ -79,6 +84,11 @@ export default function Stock() {
       return toast.error(`Only ${formatQty(form.product.stock, unit)} in stock.`)
     }
 
+    if (form.type === 'in') {
+      if (form.cost === '' || !(Number(form.cost) >= 0)) return toast.error('Enter the cost price for this delivery (0 if free).')
+      if (!(Number(form.price) > 0)) return toast.error('Selling price must be greater than zero.')
+    }
+
     setSaving(true)
     try {
       const done = await adjustStock(shopId, form.product, {
@@ -86,13 +96,16 @@ export default function Stock() {
         quantity: qty,
         note: form.note,
         actor: profile?.name || profile?.email,
+        ...(form.type === 'in' ? { cost: Number(form.cost), price: Number(form.price) } : {}),
       })
       // Update the screen from what was written instead of re-reading every
       // product and the last 250 movements.
       const id = form.product.id
-      setProducts((list) => list.map((p) => (p.id === id ? { ...p, stock: done.stock } : p)))
+      setProducts((list) => list.map((p) => (p.id === id ? { ...p, ...done.product } : p)))
       setMovements((list) => [done.movement, ...list].slice(0, 250))
-      toast.success('Stock updated.')
+      toast.success(done.movement.newPrice
+        ? `Stock updated. Selling price is now ${money(done.movement.newPrice, currency)}.`
+        : 'Stock updated.')
       setForm(null)
     } catch (err) {
       toast.error(err.message || 'Could not update stock.')
@@ -271,12 +284,71 @@ export default function Stock() {
               </p>
             )}
 
+            {form.type === 'in' && (
+              <StockInPrices form={form} setForm={setForm} currency={currency} />
+            )}
+
+            {batchesOf(form.product).length > 1 && (
+              <div className="text-sm text-muted" style={{ marginTop: -6, marginBottom: 14 }}>
+                In stock by cost (oldest sells first):{' '}
+                {batchesOf(form.product)
+                  .map((b) => `${formatQty(b.qty, form.product.unit || 'pcs')} @ ${money(b.cost, currency)}`)
+                  .join(' · ')}
+              </div>
+            )}
+
             <Field label="Note" hint="Supplier name, invoice number, reason for wastage…">
               <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
                 placeholder="Optional" />
             </Field>
           </form>
         </Modal>
+      )}
+    </>
+  )
+}
+
+/**
+ * Cost and selling price for a delivery.
+ * A new cost becomes its own batch; a new selling price applies to all stock.
+ */
+function StockInPrices({ form, setForm, currency }) {
+  const unit = form.product.unit || 'pcs'
+  const per = isMeasured(unit) ? `per ${unit}` : 'each'
+  const oldCost = lastCostOf(form.product)
+  const onHand = roundQty(form.product.stock)
+  const costChanged = form.cost !== '' && Number(form.cost) !== oldCost && onHand > 0
+  const priceChanged = form.price !== '' && Number(form.price) !== Number(form.product.price)
+
+  return (
+    <>
+      <div className="row">
+        <Field label={`Cost price (${per})`} hint={`Last paid ${money(oldCost, currency)}`}>
+          <input type="number" step="0.01" min="0" value={form.cost}
+            onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))} />
+        </Field>
+        <Field label={`Selling price (${per})`} hint={`Now ${money(form.product.price, currency)}`}>
+          <input type="number" step="0.01" min="0" value={form.price}
+            onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} />
+        </Field>
+      </div>
+      {costChanged && (
+        <div className="alert alert-blue" style={{ marginTop: -6, marginBottom: 14 }}>
+          <span>ℹ</span>
+          <span>
+            New cost is kept separate. The {formatQty(onHand, unit)} already in stock sells first at
+            its old cost, then this delivery at {money(form.cost, currency)}.
+          </span>
+        </div>
+      )}
+      {priceChanged && (
+        <div className="alert alert-amber" style={{ marginTop: -6, marginBottom: 14 }}>
+          <span>!</span>
+          <span>
+            All stock of this item sells at {money(form.price, currency)} from now on. Bills already
+            made keep their old price.
+          </span>
+        </div>
       )}
     </>
   )

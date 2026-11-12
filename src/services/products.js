@@ -1,10 +1,11 @@
 import {
   collection, doc, addDoc, getDocs, getDoc, updateDoc, deleteDoc,
-  query, where, orderBy, limit, serverTimestamp, increment, writeBatch,
+  query, where, orderBy, limit, serverTimestamp, runTransaction, writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { generateBarcode } from '../utils/barcode'
 import { roundQty } from '../utils/units'
+import { batchesOf, take, addBatch, batchFields, lastCostOf } from '../utils/batches'
 
 export function productsRef(shopId) {
   return collection(db, 'shops', shopId, 'products')
@@ -95,6 +96,10 @@ export async function createProduct(shopId, data, actor = 'system') {
     updatedAt: serverTimestamp(),
   }
 
+  // Opening stock is the first cost batch.
+  payload.lastCost = payload.cost
+  payload.batches = payload.stock > 0 ? [{ qty: payload.stock, cost: payload.cost, at: Date.now() }] : []
+
   const ref = await addDoc(productsRef(shopId), payload)
 
   if (payload.stock > 0) {
@@ -135,34 +140,76 @@ export async function logMovement(shopId, movement) {
 /**
  * Applies a manual stock change and records why it happened. `type` is one of
  * in | out | adjust; for adjust, `quantity` is the new absolute count.
+ *
+ * Stock in can carry the cost paid for this delivery and a new selling price.
+ * A different cost becomes its own batch: what is already on the shelf keeps
+ * its old cost and sells first. A new selling price applies to all stock from
+ * now on; bills already made keep the price they were sold at.
+ *
+ * Runs as a transaction so the batches always match the stock figure, even
+ * when a till is selling the same product at the same moment.
  */
-export async function adjustStock(shopId, product, { type, quantity, note, actor }) {
-  const qty = Number(quantity) || 0
+export async function adjustStock(shopId, product, { type, quantity, note, actor, cost, price }) {
+  const qty = roundQty(quantity)
   const ref = doc(db, 'shops', shopId, 'products', product.id)
-  const batch = writeBatch(db)
-
-  let delta = qty
-  if (type === 'out') delta = -qty
-  if (type === 'adjust') delta = qty - (Number(product.stock) || 0)
-  delta = roundQty(delta)
-
-  batch.update(ref, { stock: increment(delta), updatedAt: serverTimestamp() })
   const movementRef = doc(movementsRef(shopId))
-  const movement = {
-    productId: product.id,
-    productName: product.name,
-    barcode: product.barcode || '',
-    unit: product.unit || 'pcs',
-    type,
-    quantity: type === 'adjust' ? delta : qty,
-    balanceHint: roundQty((Number(product.stock) || 0) + delta),
-    note: note || '',
-    actor: actor || 'system',
-  }
-  batch.set(movementRef, { ...movement, createdAt: serverTimestamp() })
-  await batch.commit()
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists()) throw new Error('That product no longer exists.')
+    const data = snap.data()
+    const stock = roundQty(data.stock)
+    const last = lastCostOf(data)
+
+    let batches = batchesOf(data)
+    let delta = qty
+    if (type === 'out') delta = -qty
+    if (type === 'adjust') delta = roundQty(qty - stock)
+
+    const update = { stock: roundQty(stock + delta), updatedAt: serverTimestamp() }
+    const hasCost = cost !== undefined && cost !== null && cost !== '' && Number.isFinite(Number(cost))
+    const unitCost = hasCost ? Number(cost) : last
+
+    if (delta > 0) {
+      batches = addBatch(batches, delta, type === 'in' ? unitCost : last)
+      if (type === 'in' && hasCost) update.lastCost = unitCost
+    } else if (delta < 0) {
+      batches = take(batches, -delta, last).batches
+    }
+    Object.assign(update, batchFields(batches, update.lastCost ?? last))
+
+    const newPrice = Number(price)
+    const priceChanged = type === 'in' && price !== undefined && price !== '' && Number.isFinite(newPrice)
+      && newPrice > 0 && newPrice !== Number(data.price)
+    if (priceChanged) update.price = newPrice
+
+    tx.update(ref, update)
+
+    const movement = {
+      productId: product.id,
+      productName: data.name || product.name,
+      barcode: data.barcode || '',
+      unit: data.unit || 'pcs',
+      type,
+      quantity: type === 'adjust' ? delta : qty,
+      balanceHint: update.stock,
+      note: note || '',
+      actor: actor || 'system',
+    }
+    if (type === 'in') movement.cost = unitCost
+    if (priceChanged) { movement.oldPrice = Number(data.price) || 0; movement.newPrice = newPrice }
+    tx.set(movementRef, { ...movement, createdAt: serverTimestamp() })
+
+    const { updatedAt, ...saved } = update
+    return { product: saved, movement }
+  })
+
   // What was written, so the screen can update without reading it all back.
-  return { stock: roundQty((Number(product.stock) || 0) + delta), movement: { id: movementRef.id, ...movement, createdAt: new Date() } }
+  return {
+    stock: result.product.stock,
+    product: result.product,
+    movement: { id: movementRef.id, ...result.movement, createdAt: new Date() },
+  }
 }
 
 export async function listMovements(shopId, max = 200) {
@@ -182,4 +229,48 @@ export async function createCategory(shopId, name) {
 
 export async function deleteCategory(shopId, id) {
   await deleteDoc(doc(db, 'shops', shopId, 'categories', id))
+}
+
+/** Updates `category` on many products, in batches under Firestore's 500-write limit. */
+async function setCategoryOn(shopId, productIds, category) {
+  for (let i = 0; i < productIds.length; i += 450) {
+    const batch = writeBatch(db)
+    productIds.slice(i, i + 450).forEach((id) => {
+      batch.update(doc(db, 'shops', shopId, 'products', id), { category, updatedAt: serverTimestamp() })
+    })
+    // eslint-disable-next-line no-await-in-loop -- one chunk after another
+    await batch.commit()
+  }
+}
+
+/**
+ * Renames a category and moves every product in it to the new name.
+ * Renaming onto a category that already exists merges the two.
+ *
+ * `category` is { id, name } — id is null for a name that only appears on
+ * products (from an import) and has no category record yet.
+ */
+export async function renameCategory(shopId, category, newName, productIds, existing = []) {
+  const name = newName.trim()
+  if (!name) throw new Error('Enter a category name.')
+  const target = existing.find((c) => c.id !== category.id && c.name.toLowerCase() === name.toLowerCase())
+
+  await setCategoryOn(shopId, productIds, target ? target.name : name)
+
+  if (target) {
+    if (category.id) await deleteDoc(doc(db, 'shops', shopId, 'categories', category.id))
+    return { merged: true, name: target.name }
+  }
+  if (category.id) {
+    await updateDoc(doc(db, 'shops', shopId, 'categories', category.id), { name })
+  } else {
+    await addDoc(categoriesRef(shopId), { name, createdAt: serverTimestamp() })
+  }
+  return { merged: false, name }
+}
+
+/** Deletes a category; its products are left with no category. */
+export async function deleteCategoryAndClear(shopId, category, productIds) {
+  await setCategoryOn(shopId, productIds, '')
+  if (category.id) await deleteDoc(doc(db, 'shops', shopId, 'categories', category.id))
 }

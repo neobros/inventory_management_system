@@ -21,11 +21,19 @@ const SHOP_NAV = [
   { to: '/products', icon: '📦', label: 'Products', manageOnly: true },
   { to: '/labels', icon: '🏷️', label: 'Barcode Labels', manageOnly: true },
   { to: '/item-list', icon: '🖨️', label: 'Print Item List', manageOnly: true },
+  { to: '/agent-invoice', icon: '📄', label: 'Agent Invoice', manageOnly: true },
   { to: '/stock', icon: '🔄', label: 'Stock Movements', manageOnly: true },
   { to: '/reports', icon: '📈', label: 'Reports', manageOnly: true },
   { group: 'Shop', manageOnly: true },
   { to: '/staff', icon: '👥', label: 'Staff Logins', ownerOnly: true },
-  { to: '/settings', icon: '⚙️', label: 'Shop Settings', manageOnly: true },
+  // A menu with sub-pages. Add more settings pages to `children`.
+  {
+    key: 'settings', icon: '⚙️', label: 'Shop Settings', manageOnly: true,
+    children: [
+      { to: '/settings', icon: '🏪', label: 'Shop Profile' },
+      { to: '/settings/categories', icon: '🗂️', label: 'Categories' },
+    ],
+  },
 ]
 
 const ADMIN_NAV = [
@@ -47,7 +55,8 @@ const TITLES = {
   '/stock': ['Stock Movements', 'Goods in, goods out and adjustments'],
   '/reports': ['Reports', 'Sales performance and inventory health'],
   '/staff': ['Staff Logins', 'Cashier and manager accounts'],
-  '/settings': ['Shop Settings', 'Branding, currency, tax and receipt setup'],
+  '/settings': ['Shop Profile', 'Branding, currency, tax and receipt setup'],
+  '/settings/categories': ['Categories', 'Rename or delete product categories'],
   '/admin': ['Shops', 'Every shop on the platform'],
   '/admin/overview': ['Platform Overview', 'Tenant activity across all shops'],
   '/account': ['My Account', 'Your profile and password'],
@@ -61,6 +70,8 @@ const TITLES = {
 export default function Layout() {
   const { profile, shop, logout, canManage, isSuperAdmin } = useAuth()
   const [open, setOpen] = useState(false)
+  // Which sub-menus are expanded. The one holding the current page opens itself.
+  const [expanded, setExpanded] = useState({})
   const [version, setVersion] = useState('')
   const { pathname } = useLocation()
 
@@ -100,7 +111,33 @@ export default function Layout() {
           {nav.map((item, idx) =>
             item.group ? (
               <div key={`g${idx}`} className="nav-group-label">{item.group}</div>
-            ) : (
+            ) : item.children ? (() => {
+              const here = item.children.some((c) => c.to === pathname)
+              const isOpen = expanded[item.key] ?? here
+              return (
+                <div key={item.key}>
+                  <button type="button" className={`nav-item nav-parent ${here ? 'has-active' : ''}`}
+                    aria-expanded={isOpen}
+                    onClick={() => setExpanded((e) => ({ ...e, [item.key]: !isOpen }))}>
+                    <span className="ico">{item.icon}</span>
+                    {item.label}
+                    <span className={`nav-caret ${isOpen ? 'open' : ''}`}>▸</span>
+                  </button>
+                  {isOpen && (
+                    <div className="nav-sub">
+                      {item.children.map((c) => (
+                        <NavLink key={c.to} to={c.to} end
+                          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                          onClick={() => setOpen(false)}>
+                          <span className="ico">{c.icon}</span>
+                          {c.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })() : (
               <NavLink
                 key={item.to}
                 to={item.to}

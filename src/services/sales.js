@@ -5,6 +5,7 @@ import {
 import { db } from '../firebase/config'
 import { calcTotals, lineGross, lineDiscount, lineNet } from '../utils/cart'
 import { roundQty } from '../utils/units'
+import { batchesOf, take, batchFields, lastCostOf } from '../utils/batches'
 
 export function salesRef(shopId) {
   return collection(db, 'shops', shopId, 'sales')
@@ -32,19 +33,38 @@ export async function createSale(shopId, { items, billDiscountType, billDiscount
 
     const next = (counterSnap.exists() ? counterSnap.data().invoice || 0 : 0) + 1
 
-    productSnaps.forEach((snap, idx) => {
-      if (!snap.exists()) return
-      const current = Number(snap.data().stock) || 0
+    // Stock comes off the oldest cost batch first (FIFO), and each line keeps
+    // the cost it really used, so later cost changes never rewrite old profit.
+    // Worked per product, in case the same product is on the bill twice.
+    const working = new Map()
+    const lineCost = items.map((item, idx) => {
+      const snap = productSnaps[idx]
+      if (!snap.exists()) return null
+      const id = item.productId
+      if (!working.has(id)) {
+        const data = snap.data()
+        working.set(id, { ref: snap.ref, data, stock: Number(data.stock) || 0, batches: batchesOf(data) })
+      }
+      const w = working.get(id)
+      const qty = Number(item.qty) || 0
+      const used = take(w.batches, qty, lastCostOf(w.data))
+      w.batches = used.batches
       // Decimal for weighed goods (0.2 kg); rounded so stock never shows 4.79999.
-      tx.update(snap.ref, { stock: roundQty(current - (Number(items[idx].qty) || 0)) })
+      w.stock = roundQty(w.stock - qty)
+      return used.unitCost
+    })
+    working.forEach((w) => {
+      tx.update(w.ref, { stock: w.stock, ...batchFields(w.batches, lastCostOf(w.data)) })
     })
 
     tx.set(counterRef, { invoice: next }, { merge: true })
 
     tx.set(saleRef, {
       invoiceNo: next,
-      items: items.map((i) => ({
+      items: items.map((i, idx) => ({
         productId: i.productId,
+        // What one unit of this line cost the shop (oldest batch first).
+        cost: lineCost[idx] ?? (Number(i.cost) || 0),
         name: i.name,
         barcode: i.barcode || '',
         unit: i.unit || 'pcs',
