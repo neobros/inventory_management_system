@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 import { listSales } from '../services/sales'
 import { money, formatDate, toDate, daysAgo } from '../utils/format'
 import { formatQty, isMeasured, perUnit, roundQty } from '../utils/units'
@@ -21,6 +22,7 @@ export default function Sales() {
   // profile names the cashier on the return; without it every return crashed.
   const { shopId, shop, profile, currency } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
 
   const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
@@ -43,7 +45,7 @@ export default function Sales() {
     try {
       setSales(await listSales(shopId, { max: 500 }))
     } catch {
-      toast.error('Could not load sales.')
+      toast.error(tr('Could not load sales.'))
     } finally {
       setLoading(false)
     }
@@ -76,9 +78,9 @@ export default function Sales() {
       setPortalSale(sale)
 
       const how = await printBill(shop)
-      if (how === 'empty') toast.error('The receipt did not render — nothing was printed.')
-      else if (how === 'direct') toast.success(`Invoice #${sale.invoiceNo} sent to ${shop.printerName}.`)
-      else toast.success(`Invoice #${sale.invoiceNo} sent to the printer.`)
+      if (how === 'empty') toast.error(tr('The receipt did not render — nothing was printed.'))
+      else if (how === 'direct') toast.success(tr('Invoice #{no} sent to {printer}.', { no: sale.invoiceNo, printer: shop.printerName }))
+      else toast.success(tr('Invoice #{no} sent to the printer.', { no: sale.invoiceNo }))
     } finally {
       setPrintingId(null)
     }
@@ -125,7 +127,7 @@ export default function Sales() {
   )
 
   const submitReturn = async () => {
-    if (!returnLines.length) return toast.error('Choose at least one item to return.')
+    if (!returnLines.length) return toast.error(tr('Choose at least one item to return.'))
 
     setSavingReturn(true)
     try {
@@ -143,9 +145,9 @@ export default function Sales() {
       setSales((list) => list.map((s) => (s.id === saleId ? { ...s, ...saved.sale } : s)))
       setReturning(null)
 
-      toast.success(`Credit #${saved.creditNo} — refund ${money(saved.total, currency)}. Stock restored.`)
+      toast.success(tr('Credit #{no} — refund {amount}. Stock restored.', { no: saved.creditNo, amount: money(saved.total, currency) }))
     } catch (err) {
-      toast.error(err.message || 'Could not save the return.')
+      toast.error(err.message || tr('Could not save the return.'))
     } finally {
       setSavingReturn(false)
     }
@@ -160,7 +162,7 @@ export default function Sales() {
   }), [rows])
 
   const pager = usePagination(rows)
-  if (loading) return <Loading label="Loading sales…" />
+  if (loading) return <Loading label={t('Loading sales…')} />
 
   return (
     <>
@@ -169,32 +171,32 @@ export default function Sales() {
           <div className="search-box">
             <span className="ico">🔍</span>
             <input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Invoice no, customer, cashier or item…" />
+              placeholder={t('Invoice no, customer, cashier or item…')} />
           </div>
           <select value={range} onChange={(e) => setRange(e.target.value)} style={{ width: 160 }}>
-            {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            {RANGES.map((r) => <option key={r.key} value={r.key}>{t(r.label)}</option>)}
           </select>
           <div className="spacer flex gap-2 wrap">
-            <span className="badge badge-grey">{summary.count} bills</span>
+            <span className="badge badge-grey">{t('{n} bills', { n: summary.count })}</span>
             <span className="badge badge-green">{money(summary.revenue, currency)}</span>
             {summary.discount > 0 && (
-              <span className="badge badge-amber">{money(summary.discount, currency)} discounted</span>
+              <span className="badge badge-amber">{t('{amount} discounted', { amount: money(summary.discount, currency) })}</span>
             )}
           </div>
         </div>
 
         <div className="card-body tight">
           {rows.length === 0 ? (
-            <Empty icon="🧾" title="No bills in this period"
-              message="Try a wider date range or clear the search." />
+            <Empty icon="🧾" title={t('No bills in this period')}
+              message={t('Try a wider date range or clear the search.')} />
           ) : (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Invoice</th><th>Date</th><th>Customer</th><th>Cashier</th>
-                    <th className="num">Items</th><th className="num">Discount</th>
-                    <th className="num">Total</th><th>Status</th><th className="num">Actions</th>
+                    <th>{t('Invoice')}</th><th>{t('Date')}</th><th>{t('Customer')}</th><th>{t('Cashier')}</th>
+                    <th className="num">{t('Items')}</th><th className="num">{t('Discount')}</th>
+                    <th className="num">{t('Total')}</th><th>{t('Status')}</th><th className="num">{t('Actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -202,7 +204,7 @@ export default function Sales() {
                     <tr key={s.id}>
                       <td className="cell-title">#{s.invoiceNo}</td>
                       <td className="text-sm text-muted nowrap">{formatDate(s.createdAt)}</td>
-                      <td className="text-sm">{s.customer || 'Walk-in'}</td>
+                      <td className="text-sm">{s.customer || t('Walk-in')}</td>
                       <td className="text-sm">{s.cashierName || '—'}</td>
                       <td className="num">{s.itemCount}</td>
                       <td className="num">
@@ -213,26 +215,26 @@ export default function Sales() {
                       <td className="num strong">{money(s.total, currency)}</td>
                       <td>
                         {s.voided ? (
-                          <span className="badge badge-red">Cancelled</span>
+                          <span className="badge badge-red">{t('Cancelled')}</span>
                         ) : s.refundedTotal > 0 ? (
-                          <span className="badge badge-amber" title={`${money(s.refundedTotal, currency)} refunded`}>
-                            Part returned
+                          <span className="badge badge-amber" title={t('{amount} refunded', { amount: money(s.refundedTotal, currency) })}>
+                            {t('Part returned')}
                           </span>
                         ) : (
-                          <span className="badge badge-grey" style={{ textTransform: 'capitalize' }}>{s.paymentMethod}</span>
+                          <span className="badge badge-grey" style={{ textTransform: 'capitalize' }}>{t(s.paymentMethod || 'cash')}</span>
                         )}
                       </td>
                       <td className="num nowrap">
                         {!isFullyReturned(s) && (
                           <>
                             <button type="button" className="btn btn-ghost btn-sm" onClick={() => openReturn(s)}>
-                              ↩ Return
+                              {t('↩ Return')}
                             </button>{' '}
                           </>
                         )}
                         <button type="button" className="btn btn-sm" onClick={() => quickPrint(s)}
-                          disabled={printingId === s.id} title={`Print invoice #${s.invoiceNo}`}>
-                          {printingId === s.id ? <span className="spinner" /> : '🖨'} Print
+                          disabled={printingId === s.id} title={t('Print invoice #{no}', { no: s.invoiceNo })}>
+                          {printingId === s.id ? <span className="spinner" /> : '🖨'} {t('Print')}
                         </button>
                       </td>
                     </tr>
@@ -249,36 +251,35 @@ export default function Sales() {
       {returning && (
         <Modal
           wide
-          title={`Return against invoice #${returning.invoiceNo}`}
+          title={t('Return against invoice #{no}', { no: returning.invoiceNo })}
           subtitle={`${formatDate(returning.createdAt)} · ${money(returning.total, currency)}`}
           onClose={() => setReturning(null)}
           footer={
             <>
               <button type="button" className="btn btn-ghost" onClick={() => setReturning(null)}
-                disabled={savingReturn}>Cancel</button>
+                disabled={savingReturn}>{t('Cancel')}</button>
               <button type="button" className="btn btn-ghost" onClick={selectAll}
-                disabled={savingReturn}>Return whole bill</button>
+                disabled={savingReturn}>{t('Return whole bill')}</button>
               <button type="button" className="btn btn-danger" onClick={submitReturn}
                 disabled={savingReturn || !returnLines.length}>
-                {savingReturn && <span className="spinner" />} Refund {money(refund.total, currency)}
+                {savingReturn && <span className="spinner" />} {t('Refund {amount}', { amount: money(refund.total, currency) })}
               </button>
             </>
           }
         >
           <p className="text-sm text-muted mb-3">
-            Choose how many of each item are coming back. Stock is put back and a credit
-            note prints. The original bill is kept as it was.
+            {t('Choose how many of each item are coming back. Stock is put back and a credit note prints. The original bill is kept as it was.')}
           </p>
 
           <div className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 8 }}>
             <table>
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th className="num">Sold</th>
-                  <th className="num">Already back</th>
-                  <th className="num" style={{ width: 120 }}>Return</th>
-                  <th className="num">Refund</th>
+                  <th>{t('Item')}</th>
+                  <th className="num">{t('Sold')}</th>
+                  <th className="num">{t('Already back')}</th>
+                  <th className="num" style={{ width: 120 }}>{t('Return')}</th>
+                  <th className="num">{t('Refund')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -298,7 +299,7 @@ export default function Sales() {
                       <td className="num">{back > 0 ? formatQty(back, item.unit || 'pcs') : '—'}</td>
                       <td className="num">
                         {left === 0 ? (
-                          <span className="badge badge-grey">All returned</span>
+                          <span className="badge badge-grey">{t('All returned')}</span>
                         ) : (
                           <div className="qty-box" style={{ marginLeft: 'auto', width: 'fit-content' }}>
                             {!measured && <button type="button" onClick={() => setQty(item.productId, picked - 1, left)}>−</button>}
@@ -321,9 +322,9 @@ export default function Sales() {
           </div>
 
           <div className="mt-4">
-            <Field label="Reason" hint="Printed on the credit note — e.g. damaged, wrong size, customer changed mind.">
+            <Field label={t('Reason')} hint={t('Printed on the credit note — e.g. damaged, wrong size, customer changed mind.')}>
               <input value={reason} onChange={(e) => setReason(e.target.value)}
-                placeholder="Why is it coming back?" />
+                placeholder={t('Why is it coming back?')} />
             </Field>
           </div>
 
@@ -331,9 +332,11 @@ export default function Sales() {
             <div className="alert alert-amber">
               <span>↩</span>
               <span>
-                Refunding <strong>{money(refund.total, currency)}</strong>
-                {refund.tax > 0 && ` (including ${money(refund.tax, currency)} tax)`} and putting{' '}
-                {returnLines.length} item(s) back into stock.
+                {t('Refunding {amount}{tax} and putting {n} item(s) back into stock.', {
+                  amount: money(refund.total, currency),
+                  tax: refund.tax > 0 ? t(' (including {tax} tax)', { tax: money(refund.tax, currency) }) : '',
+                  n: returnLines.length,
+                })}
               </span>
             </div>
           )}

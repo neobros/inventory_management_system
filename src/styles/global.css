@@ -612,3 +612,44 @@ tbody tr:hover { background: var(--surface-2); }
   .row { flex-direction: column; }
   .topbar-sub { display: none; }
 }
+
+/* --- Language switch (top bar) ------------------------------------------ */
+.lang-switch {
+  display: inline-flex; border: 1px solid var(--border); border-radius: 999px;
+  overflow: hidden; background: var(--surface); flex-shrink: 0;
+}
+.lang-switch button {
+  border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600;
+  padding: 5px 10px; color: var(--text-2); cursor: pointer; line-height: 1.2;
+}
+.lang-switch button + button { border-left: 1px solid var(--border); }
+.lang-switch button.active { background: var(--brand); color: #fff; }
+
+/* Sinhala needs a font that has its letters. Nirmala UI ships with Windows 10
+   and 11; Noto Sans Sinhala / Iskoola Pota cover other machines. */
+body.lang-si {
+  font-family: 'Inter', 'Nirmala UI', 'Noto Sans Sinhala', 'Iskoola Pota', -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* --- Scrollbars ------------------------------------------------------------
+   Thin, rounded bars instead of the chunky Windows default.
+   Firefox reads scrollbar-width/-color; Chrome and the desktop till read the
+   ::-webkit-scrollbar rules. */
+* { scrollbar-width: thin; scrollbar-color: #c3cad6 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #c3cad6; border-radius: 999px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: #9aa4b5; background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Side menu: a faint bar that only shows up when the pointer is over the menu. */
+.sidebar-nav { scrollbar-color: transparent transparent; }
+.sidebar-nav:hover { scrollbar-color: rgba(148, 163, 184, 0.35) transparent; }
+.sidebar-nav::-webkit-scrollbar { width: 8px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: transparent; border-width: 2px; background-clip: padding-box; }
+.sidebar-nav:hover::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); background-clip: padding-box; }
+.sidebar-nav::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); background-clip: padding-box; }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 import { listProducts, findByBarcode } from '../services/products'
 import { createSale } from '../services/sales'
 import { calcTotals, lineGross, lineNet } from '../utils/cart'
@@ -16,6 +17,8 @@ import ReceiptPortal, { ReceiptBody } from '../components/Receipt'
 export default function POS() {
   const { shopId, shop, profile, currency } = useAuth()
   const toast = useToast()
+  // t() for the screen; tr() inside callbacks, so switching language never reloads data.
+  const { t } = useLang()
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,7 +53,7 @@ export default function POS() {
     try {
       setProducts(await listProducts(shopId))
     } catch {
-      toast.error('Could not load products.')
+      toast.error(tr('Could not load products.'))
     } finally {
       if (initial) setLoading(false)
     }
@@ -85,15 +88,15 @@ export default function POS() {
    */
   const addToCart = useCallback((product, qty) => {
     if (qty === undefined && isMeasured(product.unit)) {
-      if (available(product) <= 0) return toast.error(`${product.name} is out of stock.`)
+      if (available(product) <= 0) return toast.error(tr('{name} is out of stock.', { name: product.name }))
       openWeigh(product)
       return undefined
     }
     const amount = roundQty(qty ?? 1)
     if (available(product) < amount) {
       toast.error(available(product) <= 0
-        ? `${product.name} is out of stock.`
-        : `Only ${formatQty(available(product), product.unit)} of ${product.name} left.`)
+        ? tr('{name} is out of stock.', { name: product.name })
+        : tr('Only {qty} of {name} left.', { qty: formatQty(available(product), product.unit), name: product.name }))
       return undefined
     }
     setCart((list) => {
@@ -128,13 +131,13 @@ export default function POS() {
   const confirmWeigh = (e) => {
     e?.preventDefault()
     const { product, mode } = weighing
-    if (!(weighQty > 0)) return toast.error('Enter how much is being sold.')
+    if (!(weighQty > 0)) return toast.error(tr('Enter how much is being sold.'))
     if (mode === 'set') {
       if (setQty(product.id, weighQty) !== null) setWeighing(null)
       return undefined
     }
     if (available(product) < weighQty) {
-      return toast.error(`Only ${formatQty(available(product), product.unit)} of ${product.name} left.`)
+      return toast.error(tr('Only {qty} of {name} left.', { qty: formatQty(available(product), product.unit), name: product.name }))
     }
     addToCart(product, weighQty)
     setWeighing(null)
@@ -160,7 +163,7 @@ export default function POS() {
       setProducts((list) => (list.some((p) => p.id === remote.id) ? list : [...list, remote]))
       addToCart(remote)
     } else {
-      toast.error(`No product matches barcode ${code}`)
+      toast.error(tr('No product matches barcode {code}', { code }))
     }
   }
 
@@ -175,12 +178,12 @@ export default function POS() {
     const measured = isMeasured(line.unit)
     const n = Number(qty)
     if (!Number.isFinite(n) || n <= 0) {
-      toast.error('Quantity must be more than zero.')
+      toast.error(tr('Quantity must be more than zero.'))
       return null
     }
     const wanted = measured ? roundQty(n) : Math.max(1, Math.round(n))
     const capped = Math.min(wanted, line.stock || 9999)
-    if (capped < wanted) toast.error(`Only ${formatQty(line.stock, line.unit)} in stock.`)
+    if (capped < wanted) toast.error(tr('Only {qty} in stock.', { qty: formatQty(line.stock, line.unit) }))
     setCart((list) => list.map((c) => (c.productId === productId ? { ...c, qty: capped } : c)))
     return capped
   }
@@ -195,7 +198,7 @@ export default function POS() {
     if (!line) return null
     const n = Math.round((Number(value) || 0) * 100) / 100
     if (!(n > 0)) {
-      toast.error('Price must be more than zero.')
+      toast.error(tr('Price must be more than zero.'))
       return null
     }
     setCart((list) => list.map((c) => (c.productId === productId ? { ...c, price: n } : c)))
@@ -213,7 +216,7 @@ export default function POS() {
     if (!line || !(line.qty > 0)) return null
     const amount = Math.round((Number(value) || 0) * 100) / 100
     if (!(amount > 0)) {
-      toast.error('Price must be more than zero.')
+      toast.error(tr('Price must be more than zero.'))
       return null
     }
     const price = Math.round((amount / line.qty) * 1e6) / 1e6
@@ -235,7 +238,7 @@ export default function POS() {
   }
 
   const openCheckout = () => {
-    if (!cart.length) return toast.error('Add at least one item to the bill.')
+    if (!cart.length) return toast.error(tr('Add at least one item to the bill.'))
     setPaid(String(totals.total))
     setCheckout(true)
   }
@@ -287,8 +290,8 @@ export default function POS() {
       setShowReceipt(!straightToPaper)
       toast.success(
         straightToPaper
-          ? `Invoice #${saved.invoiceNo} — printing…`
-          : `Invoice #${saved.invoiceNo} saved.`
+          ? tr('Invoice #{no} — printing…', { no: saved.invoiceNo })
+          : tr('Invoice #{no} saved.', { no: saved.invoiceNo })
       )
 
       // Print before touching the cart or reloading stock, so nothing can
@@ -297,7 +300,7 @@ export default function POS() {
       if (thenPrint) {
         const how = await printBill(shop)
         if (how === 'empty') {
-          toast.error('The receipt did not render — nothing was sent to the printer.')
+          toast.error(tr('The receipt did not render — nothing was sent to the printer.'))
           setShowReceipt(true)
         }
       }
@@ -310,7 +313,7 @@ export default function POS() {
         : p)))
       clearCart()
     } catch (err) {
-      toast.error(err.message || 'Could not save the bill.')
+      toast.error(err.message || tr('Could not save the bill.'))
     } finally {
       setSaving(false)
     }
@@ -337,7 +340,7 @@ export default function POS() {
     ).slice(0, 60)
   }, [products, search])
 
-  if (loading) return <Loading label="Loading catalogue…" />
+  if (loading) return <Loading label={t('Loading catalogue…')} />
 
   const change = Math.max(0, (Number(paid) || 0) - totals.total)
   const short = (Number(paid) || 0) < totals.total
@@ -353,29 +356,29 @@ export default function POS() {
               className="input-lg mono"
               value={scan}
               onChange={(e) => setScan(e.target.value)}
-              placeholder="Scan barcode here — or type a code and press Enter"
+              placeholder={t('Scan barcode here — or type a code and press Enter')}
               autoFocus
               autoComplete="off"
             />
-            <button type="submit" className="btn">Add</button>
+            <button type="submit" className="btn">{t('Add')}</button>
           </form>
 
           <div className="card">
             <div className="card-head">
-              <h2>Products</h2>
+              <h2>{t('Products')}</h2>
               <div className="search-box ml-auto">
                 <span className="ico">🔍</span>
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search name, SKU or barcode"
+                  placeholder={t('Search name, SKU or barcode')}
                 />
               </div>
             </div>
             <div className="card-body">
               {visible.length === 0 ? (
-                <Empty icon="📦" title="No products found"
-                  message={products.length ? 'Try a different search.' : 'Add products before billing.'} />
+                <Empty icon="📦" title={t('No products found')}
+                  message={products.length ? t('Try a different search.') : t('Add products before billing.')} />
               ) : (
                 <div className="product-tiles">
                   {visible.map((p) => {
@@ -388,7 +391,7 @@ export default function POS() {
                           {isMeasured(p.unit) && <span className="tile-per"> / {p.unit}</span>}
                         </div>
                         <div className="tile-stock">
-                          {left > 0 ? `${formatQty(left, p.unit || 'pcs')} available` : 'Out of stock'}
+                          {left > 0 ? t('{qty} available', { qty: formatQty(left, p.unit || 'pcs') }) : t('Out of stock')}
                         </div>
                       </button>
                     )
@@ -402,24 +405,24 @@ export default function POS() {
         <div className="pos-cart">
           <div className="card">
             <div className="card-head">
-              <h2>Current Bill</h2>
-              <span className="badge badge-brand">{totals.itemCount} items</span>
+              <h2>{t('Current Bill')}</h2>
+              <span className="badge badge-brand">{t('{n} items', { n: totals.itemCount })}</span>
               <div className="spacer flex gap-2">
                 {lastSale && (
-                  <button type="button" className="btn btn-ghost btn-sm" title={`Reprint invoice #${lastSale.invoiceNo}`}
+                  <button type="button" className="btn btn-ghost btn-sm" title={t('Reprint invoice #{no}', { no: lastSale.invoiceNo })}
                     onClick={() => printBill(shop)}>
-                    🖨 Last bill
+                    {t('🖨 Last bill')}
                   </button>
                 )}
                 {cart.length > 0 && (
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={clearCart}>Clear</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={clearCart}>{t('Clear')}</button>
                 )}
               </div>
             </div>
 
             <div className="card-body tight">
               {cart.length === 0 ? (
-                <Empty icon="🛒" title="Bill is empty" message="Scan a barcode or tap a product." />
+                <Empty icon="🛒" title={t('Bill is empty')} message={t('Scan a barcode or tap a product.')} />
               ) : (
                 <div className="cart-lines">
                   {cart.map((item) => (
@@ -428,16 +431,16 @@ export default function POS() {
                         <div className="cart-line-name">
                           {item.name}
                           {/* Every item: edit the selling amount for this line (3 pcs → 160, 600 g → 650). */}
-                          <div className="price-edit" title="Selling amount for this line, this bill only.">
+                          <div className="price-edit" title={t('Selling amount for this line, this bill only.')}>
                             <span>{currency}</span>
                             <NumberInput value={lineGross(item)} onCommit={(v) => setLineAmount(item.productId, v)}
                               aria-label={`Selling amount for ${formatQty(item.qty, item.unit)}`} />
-                            <span>for {formatQty(item.qty, item.unit)}</span>
+                            <span>{t('for {qty}', { qty: formatQty(item.qty, item.unit) })}</span>
                             {item.price !== item.listPrice && (
                               <button type="button" className="price-reset"
-                                title="Back to the normal price"
+                                title={t('Back to the normal price')}
                                 onClick={() => setPrice(item.productId, item.listPrice)}>
-                                was {money(Math.round(item.listPrice * item.qty * 100) / 100, currency)} ↺
+                                {t('was {amount} ↺', { amount: money(Math.round(item.listPrice * item.qty * 100) / 100, currency) })}
                               </button>
                             )}
                           </div>
@@ -445,10 +448,10 @@ export default function POS() {
                             <div className="cell-sub">{money(item.price, currency)} {perUnit(item.unit)}</div>
                           )}
                           {/* Warns without revealing the cost figure — the sale can still go ahead. */}
-                          {belowCost(item) && <div className="below-cost">⚠ Below cost</div>}
+                          {belowCost(item) && <div className="below-cost">{t('⚠ Below cost')}</div>}
                         </div>
                         {isMeasured(item.unit) ? (
-                          <button type="button" className="weigh-btn" title="Change amount"
+                          <button type="button" className="weigh-btn" title={t('Change amount')}
                             onClick={() => openWeigh({ id: item.productId, name: item.name, unit: item.unit, price: item.price }, 'set')}>
                             ⚖ {formatQty(item.qty, item.unit)}
                           </button>
@@ -456,12 +459,12 @@ export default function POS() {
                           <div className="qty-box">
                             <button type="button" onClick={() => setQty(item.productId, item.qty - 1)}>−</button>
                             <NumberInput value={item.qty} onCommit={(v) => setQty(item.productId, v)}
-                              inputMode="numeric" aria-label="Quantity" />
+                              inputMode="numeric" aria-label={t('Quantity')} />
                             <button type="button" onClick={() => setQty(item.productId, item.qty + 1)}>+</button>
                           </div>
                         )}
                         <button type="button" className="btn btn-icon" onClick={() => removeLine(item.productId)}
-                          title="Remove">🗑</button>
+                          title={t('Remove')}>🗑</button>
                       </div>
 
                       <div className="disc-row">
@@ -469,8 +472,8 @@ export default function POS() {
                           value={item.discountType}
                           onChange={(e) => setLineDiscount(item.productId, { discountType: e.target.value })}
                         >
-                          <option value="amount">{currency} off</option>
-                          <option value="percent">% off</option>
+                          <option value="amount">{t('{currency} off', { currency })}</option>
+                          <option value="percent">{t('% off')}</option>
                         </select>
                         <input
                           type="number"
@@ -478,7 +481,7 @@ export default function POS() {
                           step="0.01"
                           value={item.discountValue || ''}
                           onChange={(e) => setLineDiscount(item.productId, { discountValue: e.target.value })}
-                          placeholder="Item discount"
+                          placeholder={t('Item discount')}
                         />
                         <strong className="nowrap" style={{ minWidth: 78, textAlign: 'right' }}>
                           {money(lineNet(item), currency)}
@@ -492,11 +495,11 @@ export default function POS() {
 
             <div className="card-body" style={{ borderTop: '1px solid var(--border)' }}>
               <div className="field" style={{ marginBottom: 10 }}>
-                <label>Discount on whole bill</label>
+                <label>{t('Discount on whole bill')}</label>
                 <div className="disc-row" style={{ marginTop: 0 }}>
                   <select value={billDiscountType} onChange={(e) => setBillDiscountType(e.target.value)}>
-                    <option value="amount">{currency} off</option>
-                    <option value="percent">% off</option>
+                    <option value="amount">{t('{currency} off', { currency })}</option>
+                    <option value="percent">{t('% off')}</option>
                   </select>
                   <input
                     type="number" min="0" step="0.01"
@@ -508,37 +511,37 @@ export default function POS() {
               </div>
 
               <div className="totals-row">
-                <span className="text-muted">Subtotal</span>
+                <span className="text-muted">{t('Subtotal')}</span>
                 <span>{money(totals.subtotal, currency)}</span>
               </div>
               {totals.itemDiscount > 0 && (
                 <div className="totals-row">
-                  <span className="text-muted">Item discounts</span>
+                  <span className="text-muted">{t('Item discounts')}</span>
                   <span className="text-red">−{money(totals.itemDiscount, currency)}</span>
                 </div>
               )}
               {totals.billDiscount > 0 && (
                 <div className="totals-row">
-                  <span className="text-muted">Bill discount</span>
+                  <span className="text-muted">{t('Bill discount')}</span>
                   <span className="text-red">−{money(totals.billDiscount, currency)}</span>
                 </div>
               )}
               {taxRate > 0 && (
                 <div className="totals-row">
-                  <span className="text-muted">Tax ({taxRate}%)</span>
+                  <span className="text-muted">{t('Tax ({rate}%)', { rate: taxRate })}</span>
                   <span>{money(totals.tax, currency)}</span>
                 </div>
               )}
               <div className="totals-row grand">
-                <span>Total</span>
+                <span>{t('Total')}</span>
                 <span>{money(totals.total, currency)}</span>
               </div>
 
               <button type="button" className="btn btn-lg btn-block mt-4" onClick={openCheckout} disabled={!cart.length}>
-                Charge {money(totals.total, currency)}
+                {t('Charge {amount}', { amount: money(totals.total, currency) })}
               </button>
               <p className="text-sm text-muted mt-2" style={{ textAlign: 'center' }}>
-                F2 focus scanner · F9 checkout
+                {t('F2 focus scanner · F9 checkout')}
               </p>
             </div>
           </div>
@@ -547,38 +550,38 @@ export default function POS() {
 
       {checkout && (
         <Modal
-          title="Take payment"
-          subtitle={`${totals.itemCount} items · ${money(totals.total, currency)}`}
+          title={t('Take payment')}
+          subtitle={t('{n} items · {amount}', { n: totals.itemCount, amount: money(totals.total, currency) })}
           onClose={() => !saving && setCheckout(false)}
           footer={
             <>
               <button type="button" className="btn btn-ghost" onClick={() => setCheckout(false)} disabled={saving}>
-                Back
+                {t('Back')}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => completeSale(false)} disabled={saving}>
-                Save only
+                {t('Save only')}
               </button>
               <button type="button" className="btn btn-success" onClick={() => completeSale(true)} disabled={saving}>
-                {saving && <span className="spinner" />} Save & print bill
+                {saving && <span className="spinner" />} {t('Save & print bill')}
               </button>
             </>
           }
         >
           <div className="row">
-            <Field label="Payment method">
+            <Field label={t('Payment method')}>
               <select value={method} onChange={(e) => setMethod(e.target.value)}>
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="mobile">Mobile / QR</option>
-                <option value="credit">Credit</option>
+                <option value="cash">{t('Cash')}</option>
+                <option value="card">{t('Card')}</option>
+                <option value="mobile">{t('Mobile / QR')}</option>
+                <option value="credit">{t('Credit')}</option>
               </select>
             </Field>
-            <Field label="Customer (optional)">
-              <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Walk-in" />
+            <Field label={t('Customer (optional)')}>
+              <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder={t('Walk-in')} />
             </Field>
           </div>
 
-          <Field label="Amount received">
+          <Field label={t('Amount received')}>
             <input
               type="number" step="0.01" min="0" className="input-lg mono"
               value={paid} onChange={(e) => setPaid(e.target.value)} autoFocus
@@ -589,17 +592,17 @@ export default function POS() {
             {[totals.total, 500, 1000, 2000, 5000].map((v, i) => (
               <button key={i} type="button" className="btn btn-ghost btn-sm"
                 onClick={() => setPaid(String(i === 0 ? totals.total : v))}>
-                {i === 0 ? 'Exact' : money(v, currency)}
+                {i === 0 ? t('Exact') : money(v, currency)}
               </button>
             ))}
           </div>
 
           <div className="card" style={{ background: change > 0 ? 'var(--green-soft)' : 'var(--surface-2)' }}>
             <div className="card-body">
-              <div className="totals-row"><span>Total due</span><strong>{money(totals.total, currency)}</strong></div>
-              <div className="totals-row"><span>Received</span><strong>{money(Number(paid) || 0, currency)}</strong></div>
+              <div className="totals-row"><span>{t('Total due')}</span><strong>{money(totals.total, currency)}</strong></div>
+              <div className="totals-row"><span>{t('Received')}</span><strong>{money(Number(paid) || 0, currency)}</strong></div>
               <div className="totals-row grand" style={{ fontSize: 17 }}>
-                <span>{short ? 'Balance owing' : 'Change'}</span>
+                <span>{short ? t('Balance owing') : t('Change')}</span>
                 <span className={short ? 'text-red' : 'text-green'}>
                   {money(short ? totals.total - (Number(paid) || 0) : change, currency)}
                 </span>
@@ -612,20 +615,20 @@ export default function POS() {
       {weighing && (
         <Modal
           title={weighing.product.name}
-          subtitle={`${money(weighPrice, currency)} per ${weighing.product.unit}`}
+          subtitle={t('{price} per {unit}', { price: money(weighPrice, currency), unit: weighing.product.unit })}
           onClose={() => setWeighing(null)}
           footer={
             <>
-              <button type="button" className="btn btn-ghost" onClick={() => setWeighing(null)}>Cancel</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setWeighing(null)}>{t('Cancel')}</button>
               <button type="submit" form="weigh-form" className="btn btn-success" disabled={!(weighQty > 0)}>
-                {weighing.mode === 'set' ? 'Update' : 'Add to bill'}
+                {weighing.mode === 'set' ? t('Update') : t('Add to bill')}
                 {weighQty > 0 && ` — ${money(Math.round(weighQty * weighPrice * 100) / 100, currency)}`}
               </button>
             </>
           }
         >
           <form id="weigh-form" onSubmit={confirmWeigh}>
-            <Field label="How much?">
+            <Field label={t('How much?')}>
               <div className="row" style={{ gap: 8 }}>
                 <input
                   type="number" step="any" min="0" className="input-lg mono" autoFocus
@@ -649,7 +652,7 @@ export default function POS() {
             </div>
             {weighQty > 0 && (
               <p className="text-sm text-muted mt-3" style={{ marginBottom: 0 }}>
-                = {weighQty} {weighing.product.unit} taken off stock
+                {t('= {qty} {unit} taken off stock', { qty: weighQty, unit: weighing.product.unit })}
               </p>
             )}
           </form>
@@ -661,14 +664,14 @@ export default function POS() {
 
       {lastSale && showReceipt && (
         <Modal
-          title={`Invoice #${lastSale.invoiceNo}`}
-          subtitle={shop?.printerName ? `Prints to ${shop.printerName}` : undefined}
+          title={t('Invoice #{no}', { no: lastSale.invoiceNo })}
+          subtitle={shop?.printerName ? t('Prints to {printer}', { printer: shop.printerName }) : undefined}
           onClose={() => setShowReceipt(false)}
           footer={
             <>
-              <button type="button" className="btn btn-ghost" onClick={() => setShowReceipt(false)}>Done</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setShowReceipt(false)}>{t('Done')}</button>
               <button type="button" className="btn" onClick={() => printBill(shop)}>
-                🖨 Print bill
+                {t('🖨 Print bill')}
               </button>
             </>
           }

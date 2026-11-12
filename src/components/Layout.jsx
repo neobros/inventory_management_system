@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { isDesktop, appVersion } from '../utils/desktop'
+import { useLang, LanguageSwitch } from '../i18n/LanguageContext'
 
 const ROLE_LABEL = {
   superadmin: 'Platform Admin',
@@ -65,6 +66,7 @@ const TITLES = {
   '/admin/delete-products': ['Delete Products', 'Remove many products from a shop using a JSON list'],
   '/admin/import': ['Import Products', 'Add many products to a shop from JSON'],
   '/admin/release': ['App Updates', 'Publish a new till version to every shop'],
+  '/agent-invoice': ['Agent Invoice', 'Price list or invoice for agents, as a PDF'],
 }
 
 export default function Layout() {
@@ -74,6 +76,7 @@ export default function Layout() {
   const [expanded, setExpanded] = useState({})
   const [version, setVersion] = useState('')
   const { pathname } = useLocation()
+  const { t } = useLang()
 
   // Desktop till only — shown in the header so a shop can quote it on a support
   // call without hunting through menus.
@@ -87,7 +90,9 @@ export default function Layout() {
     if (i.manageOnly) return canManage
     return true
   })
-  const [title, subtitle] = TITLES[pathname] || [shop?.name || 'StockPilot', '']
+  const [rawTitle, rawSubtitle] = TITLES[pathname] || [shop?.name || 'StockPilot', '']
+  const title = t(rawTitle)
+  const subtitle = rawSubtitle ? t(rawSubtitle) : ''
   const initials = (profile?.name || profile?.email || '?').slice(0, 2).toUpperCase()
 
   return (
@@ -103,14 +108,14 @@ export default function Layout() {
           )}
           <div className="sidebar-brand-text">
             <strong>{isSuperAdmin ? 'StockPilot Admin' : shop?.name || 'StockPilot'}</strong>
-            <span>{isSuperAdmin ? 'Platform control' : 'Inventory & POS'}</span>
+            <span>{isSuperAdmin ? 'Platform control' : t('Inventory & POS')}</span>
           </div>
         </div>
 
         <nav className="sidebar-nav">
           {nav.map((item, idx) =>
             item.group ? (
-              <div key={`g${idx}`} className="nav-group-label">{item.group}</div>
+              <div key={`g${idx}`} className="nav-group-label">{t(item.group)}</div>
             ) : item.children ? (() => {
               const here = item.children.some((c) => c.to === pathname)
               const isOpen = expanded[item.key] ?? here
@@ -120,7 +125,7 @@ export default function Layout() {
                     aria-expanded={isOpen}
                     onClick={() => setExpanded((e) => ({ ...e, [item.key]: !isOpen }))}>
                     <span className="ico">{item.icon}</span>
-                    {item.label}
+                    {t(item.label)}
                     <span className={`nav-caret ${isOpen ? 'open' : ''}`}>▸</span>
                   </button>
                   {isOpen && (
@@ -130,7 +135,7 @@ export default function Layout() {
                           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                           onClick={() => setOpen(false)}>
                           <span className="ico">{c.icon}</span>
-                          {c.label}
+                          {t(c.label)}
                         </NavLink>
                       ))}
                     </div>
@@ -146,7 +151,7 @@ export default function Layout() {
                 onClick={() => setOpen(false)}
               >
                 <span className="ico">{item.icon}</span>
-                {item.label}
+                {t(item.label)}
               </NavLink>
             )
           )}
@@ -157,9 +162,9 @@ export default function Layout() {
             <div className="avatar">{initials}</div>
             <div className="sidebar-user-meta">
               <strong>{profile?.name || 'User'}</strong>
-              <span style={{ textTransform: 'capitalize' }}>{profile?.role}</span>
+              <span>{t(ROLE_LABEL[profile?.role] || profile?.role || '')}</span>
             </div>
-            <button type="button" className="btn btn-icon" title="Sign out" onClick={logout}
+            <button type="button" className="btn btn-icon" title={t('Sign out')} onClick={logout}
               style={{ color: '#94a3b8' }}>⏻</button>
           </div>
         </div>
@@ -167,7 +172,7 @@ export default function Layout() {
 
       <div className="main">
         <header className="topbar no-print">
-          <button type="button" className="burger" onClick={() => setOpen(true)} aria-label="Menu">☰</button>
+          <button type="button" className="burger" onClick={() => setOpen(true)} aria-label={t('Menu')}>☰</button>
 
           <div className="topbar-title">
             <h1>{title}</h1>
@@ -177,8 +182,8 @@ export default function Layout() {
           <div className="topbar-actions">
             {!isSuperAdmin && shop && (
               <div className="topbar-chips">
-                <span className="chip" title="Currency">{shop.currency}</span>
-                <span className="chip" title="Receipt paper size">{shop.paperSize}</span>
+                <span className="chip" title={t('Currency')}>{shop.currency}</span>
+                <span className="chip" title={t('Receipt paper size')}>{shop.paperSize}</span>
                 {shop.printerName && (
                   <span className="chip chip-ok" title={`Prints to ${shop.printerName}`}>
                     🖨 {shop.printerName}
@@ -187,13 +192,15 @@ export default function Layout() {
               </div>
             )}
 
-            {version && <span className="chip chip-quiet" title="Installed version">v{version}</span>}
+            {version && <span className="chip chip-quiet" title={t('Installed version')}>v{version}</span>}
 
-            <NavLink to="/account" className="topbar-user" title="My Account">
+            <LanguageSwitch />
+
+            <NavLink to="/account" className="topbar-user" title={t('My Account')}>
               <span className="avatar" style={{ width: 30, height: 30, fontSize: 12 }}>{initials}</span>
               <span className="topbar-user-meta">
                 <strong>{profile?.name || profile?.email}</strong>
-                <span>{ROLE_LABEL[profile?.role] || profile?.role}</span>
+                <span>{t(ROLE_LABEL[profile?.role] || profile?.role || '')}</span>
               </span>
             </NavLink>
           </div>

@@ -9,6 +9,7 @@ import { buildReport, isoDay, SORTS, fillDailySeries } from '../utils/report'
 import { Empty, Loading, Stat } from '../components/ui'
 import Pagination, { usePagination } from '../components/Pagination'
 import RevenueChart from '../components/RevenueChart'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 
 const PRESETS = [
   { key: 'today', label: 'Today', days: 0 },
@@ -37,6 +38,7 @@ function presetRange(key) {
 export default function Reports() {
   const { shopId, currency } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
 
   const [sales, setSales] = useState([])
   const [products, setProducts] = useState([])
@@ -62,7 +64,7 @@ export default function Reports() {
       setProducts(p)
       setReturns(r)
     } catch {
-      toast.error('Could not load report data.')
+      toast.error(tr('Could not load report data.'))
     } finally {
       setLoading(false)
     }
@@ -108,7 +110,7 @@ export default function Reports() {
 
   /** Per-item figures as a spreadsheet, for accounting or stock-taking. */
   const exportCsv = () => {
-    if (!visibleItems.length) return toast.error('Nothing to export for this period.')
+    if (!visibleItems.length) return toast.error(t('Nothing to export for this period.'))
 
     const esc = (v) => `"${String(v).replace(/"/g, '""')}"`
     const rows = [
@@ -136,7 +138,7 @@ export default function Reports() {
     a.click()
     document.body.removeChild(a)
     setTimeout(() => URL.revokeObjectURL(url), 1000)
-    toast.success('Report exported.')
+    toast.success(t('Report exported.'))
     return undefined
   }
 
@@ -160,17 +162,17 @@ export default function Reports() {
         <div className="card-body" style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ minWidth: 170 }}>
             <label className="text-sm strong" style={{ display: 'block', marginBottom: 6, color: 'var(--text-2)' }}>
-              Period
+              {t('Period')}
             </label>
             <select value={preset} onChange={(e) => applyPreset(e.target.value)}>
-              {PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-              <option value="custom">Custom range…</option>
+              {PRESETS.map((p) => <option key={p.key} value={p.key}>{t(p.label)}</option>)}
+              <option value="custom">{t('Custom range…')}</option>
             </select>
           </div>
 
           <div>
             <label className="text-sm strong" style={{ display: 'block', marginBottom: 6, color: 'var(--text-2)' }}>
-              From
+              {t('From')}
             </label>
             <input type="date" value={from} max={to || undefined}
               onChange={(e) => { setFrom(e.target.value); setPreset('custom') }} />
@@ -178,44 +180,44 @@ export default function Reports() {
 
           <div>
             <label className="text-sm strong" style={{ display: 'block', marginBottom: 6, color: 'var(--text-2)' }}>
-              To
+              {t('To')}
             </label>
             <input type="date" value={to} min={from || undefined}
               onChange={(e) => { setTo(e.target.value); setPreset('custom') }} />
           </div>
 
           <div className="ml-auto flex gap-2">
-            <button type="button" className="btn btn-ghost" onClick={exportCsv}>⬇ Export CSV</button>
-            <button type="button" className="btn btn-ghost" onClick={() => window.print()}>🖨 Print</button>
+            <button type="button" className="btn btn-ghost" onClick={exportCsv}>{t('⬇ Export CSV')}</button>
+            <button type="button" className="btn btn-ghost" onClick={() => window.print()}>{t('🖨 Print')}</button>
           </div>
         </div>
       </div>
 
       {report.bills === 0 ? (
         <div className="card">
-          <Empty icon="📈" title="No sales in this period"
-            message="Pick a wider date range, or start billing to see figures here." />
+          <Empty icon="📈" title={t('No sales in this period')}
+            message={t('Pick a wider date range, or start billing to see figures here.')} />
         </div>
       ) : (
         <>
           {/* --- Headline figures ----------------------------------------- */}
           <div className="grid grid-4 mb-4">
-            <Stat label="Net revenue" value={money(report.revenue, currency)}
+            <Stat label={t('Net revenue')} value={money(report.revenue, currency)}
               foot={report.refunds > 0
-                ? `${money(report.grossRevenue, currency)} less ${money(report.refunds, currency)} refunded`
-                : `${num(report.bills)} bills · ${num(report.itemsSold)} items`}
+                ? t('{gross} less {refunds} refunded', { gross: money(report.grossRevenue, currency), refunds: money(report.refunds, currency) })
+                : t('{bills} bills · {items} items', { bills: num(report.bills), items: num(report.itemsSold) })}
               icon="💰" tone="green" />
-            <Stat label="Gross profit (est.)" value={money(report.profit, currency)}
-              foot={`${report.margin.toFixed(1)}% margin`} icon="📈" tone="brand" />
-            <Stat label="Average bill" value={money(report.average, currency)}
-              foot={report.busiestHour !== null ? `Busiest at ${report.busiestHour}:00` : undefined}
+            <Stat label={t('Gross profit (est.)')} value={money(report.profit, currency)}
+              foot={t('{pct}% margin', { pct: report.margin.toFixed(1) })} icon="📈" tone="brand" />
+            <Stat label={t('Average bill')} value={money(report.average, currency)}
+              foot={report.busiestHour !== null ? t('Busiest at {hour}:00', { hour: report.busiestHour }) : undefined}
               icon="🧾" tone="blue" />
-            <Stat label="Discounts given" value={money(report.discount, currency)}
-              foot={report.tax > 0 ? `Tax collected ${money(report.tax, currency)}` : 'No tax applied'}
+            <Stat label={t('Discounts given')} value={money(report.discount, currency)}
+              foot={report.tax > 0 ? t('Tax collected {amount}', { amount: money(report.tax, currency) }) : t('No tax applied')}
               icon="🏷️" tone="amber" />
             {report.refunds > 0 && (
-              <Stat label="Refunded" value={money(report.refunds, currency)}
-                foot={`${num(report.returns.length)} returns · ${num(report.refundedUnits)} items back`}
+              <Stat label={t('Refunded')} value={money(report.refunds, currency)}
+                foot={t('{returns} returns · {units} items back', { returns: num(report.returns.length), units: num(report.refundedUnits) })}
                 icon="↩" tone="red" />
             )}
           </div>
@@ -223,7 +225,7 @@ export default function Reports() {
           {/* --- Daily revenue -------------------------------------------- */}
           <div className="card mb-4">
             <div className="card-head">
-              <h2>Daily revenue</h2>
+              <h2>{t('Daily revenue')}</h2>
               <span className="badge badge-grey spacer">
                 {formatDate(from || report.days[0]?.[0], false)} – {formatDate(to || new Date(), false)}
               </span>
@@ -231,9 +233,9 @@ export default function Reports() {
             <div className="card-body">
               <RevenueChart series={daily} currency={currency} />
               <div className="flex items-center gap-3 mt-3 wrap">
-                <span className="chart-legend"><span className="chart-key" /> Revenue per day</span>
+                <span className="chart-legend"><span className="chart-key" /> {t('Revenue per day')}</span>
                 <span className="text-sm text-muted ml-auto">
-                  Peak {money(peak, currency)} · {daily.length} days
+                  {t('Peak {amount} · {n} days', { amount: money(peak, currency), n: daily.length })}
                 </span>
               </div>
             </div>
@@ -242,14 +244,14 @@ export default function Reports() {
           {/* --- Split: payment + categories ------------------------------ */}
           <div className="grid grid-2 mb-4">
             <div className="card">
-              <div className="card-head"><h2>Payment methods</h2></div>
+              <div className="card-head"><h2>{t('Payment methods')}</h2></div>
               <div className="card-body">
                 {Object.entries(report.byMethod).sort(([, a], [, b]) => b - a).map(([method, value]) => {
                   const pct = methodTotal ? (value / methodTotal) * 100 : 0
                   return (
                     <div key={method} className="mb-3">
                       <div className="flex text-sm" style={{ justifyContent: 'space-between' }}>
-                        <span style={{ textTransform: 'capitalize' }}>{method}</span>
+                        <span style={{ textTransform: 'capitalize' }}>{t(method)}</span>
                         <span className="strong">{money(value, currency)} · {pct.toFixed(0)}%</span>
                       </div>
                       <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 999, marginTop: 5 }}>
@@ -262,16 +264,16 @@ export default function Reports() {
             </div>
 
             <div className="card">
-              <div className="card-head"><h2>Categories</h2></div>
+              <div className="card-head"><h2>{t('Categories')}</h2></div>
               <div className="card-body">
-                {report.categories.length === 0 && <p className="text-sm text-muted">No categories set.</p>}
+                {report.categories.length === 0 && <p className="text-sm text-muted">{t('No categories set.')}</p>}
                 {report.categories.slice(0, 8).map((c) => {
                   const pct = report.revenue ? (c.revenue / report.revenue) * 100 : 0
                   return (
                     <div key={c.name} className="mb-3">
                       <div className="flex text-sm" style={{ justifyContent: 'space-between' }}>
-                        <span>{c.name}</span>
-                        <span className="strong">{money(c.revenue, currency)} · {num(c.qty, 3)} sold</span>
+                        <span>{c.name === 'Uncategorised' ? t(c.name) : c.name}</span>
+                        <span className="strong">{money(c.revenue, currency)} · {t('{qty} sold', { qty: num(c.qty, 3) })}</span>
                       </div>
                       <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 999, marginTop: 5 }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: 'var(--brand)', borderRadius: 999 }} />
@@ -286,41 +288,41 @@ export default function Reports() {
           {/* --- Per-item detail ------------------------------------------ */}
           <div className="card">
             <div className="card-head">
-              <h2>Product performance</h2>
+              <h2>{t('Product performance')}</h2>
               <div className="search-box">
                 <span className="ico">🔍</span>
                 <input value={search} onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Filter by product, barcode or category…" />
+                  placeholder={t('Filter by product, barcode or category…')} />
               </div>
               <div className="spacer flex gap-2 items-center">
-                <span className="text-sm text-muted">Sort by</span>
+                <span className="text-sm text-muted">{t('Sort by')}</span>
                 <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} style={{ width: 150 }}>
-                  <option value="revenue">Revenue</option>
-                  <option value="profit">Profit</option>
-                  <option value="qty">Units sold</option>
-                  <option value="margin">Margin %</option>
-                  <option value="name">Name</option>
+                  <option value="revenue">{t('Revenue')}</option>
+                  <option value="profit">{t('Profit')}</option>
+                  <option value="qty">{t('Units sold')}</option>
+                  <option value="margin">{t('Margin %')}</option>
+                  <option value="name">{t('Name')}</option>
                 </select>
               </div>
             </div>
 
             <div className="card-body tight">
               {visibleItems.length === 0 ? (
-                <Empty icon="🔍" title="Nothing matches that filter" />
+                <Empty icon="🔍" title={t('Nothing matches that filter')} />
               ) : (
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
-                        <th>Product</th>
-                        <th>Category</th>
-                        <th className="num">Units</th>
-                        <th className="num">Revenue</th>
-                        <th className="num">Cost</th>
-                        <th className="num">Profit</th>
-                        <th className="num">Margin</th>
-                        <th className="num">Discount</th>
-                        <th className="num">% of sales</th>
+                        <th>{t('Product')}</th>
+                        <th>{t('Category')}</th>
+                        <th className="num">{t('Units')}</th>
+                        <th className="num">{t('Revenue')}</th>
+                        <th className="num">{t('Cost')}</th>
+                        <th className="num">{t('Profit')}</th>
+                        <th className="num">{t('Margin')}</th>
+                        <th className="num">{t('Discount')}</th>
+                        <th className="num">{t('% of sales')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -330,7 +332,7 @@ export default function Reports() {
                             <div className="cell-title">{i.name}</div>
                             {i.barcode && <div className="cell-sub mono">{i.barcode}</div>}
                           </td>
-                          <td className="text-sm">{i.category}</td>
+                          <td className="text-sm">{i.category === 'Uncategorised' ? t(i.category) : i.category}</td>
                           <td className="num">{num(i.qty, 3)}</td>
                           <td className="num strong">{money(i.revenue, currency)}</td>
                           <td className="num text-muted">{money(i.cost, currency)}</td>
@@ -357,7 +359,7 @@ export default function Reports() {
                     </tbody>
                     <tfoot>
                       <tr style={{ background: 'var(--surface-2)', fontWeight: 650 }}>
-                        <td colSpan={2}>{visibleItems.length} products</td>
+                        <td colSpan={2}>{t('{n} products', { n: visibleItems.length })}</td>
                         <td className="num">{num(visibleItems.reduce((s, i) => s + i.qty, 0))}</td>
                         <td className="num">{money(visibleItems.reduce((s, i) => s + i.revenue, 0), currency)}</td>
                         <td className="num">{money(visibleItems.reduce((s, i) => s + i.cost, 0), currency)}</td>
@@ -373,8 +375,10 @@ export default function Reports() {
           </div>
 
           <p className="text-sm text-muted mt-3">
-            Profit is estimated using each product's <strong>current</strong> cost price, since
-            historical cost is not stored on past bills. Changing a cost changes past figures.
+            {(() => {
+              const [before, after = ''] = t("Profit is estimated using each product's {current} cost price, since historical cost is not stored on past bills. Changing a cost changes past figures.").split('{current}')
+              return <>{before}<strong>{t('current')}</strong>{after}</>
+            })()}
           </p>
         </>
       )}

@@ -6,6 +6,7 @@ import { listProducts } from '../services/products'
 import { printPortal, nextFrame, portalReady } from '../utils/print'
 import { Empty, Field, Loading } from '../components/ui'
 import { money } from '../utils/format'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 
 // Real page margins: the shared print rule sets margin 0, which is right for
 // receipts but would run a multi-page list into the paper edge.
@@ -19,6 +20,7 @@ const A4_CSS = '@page { size: A4 portrait; margin: 12mm 10mm; }'
 export default function ItemList() {
   const { shopId, shop, currency } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
@@ -39,7 +41,7 @@ export default function ItemList() {
     setLoading(true)
     listProducts(shopId)
       .then(setProducts)
-      .catch(() => toast.error('Could not load products.'))
+      .catch(() => toast.error(tr('Could not load products.')))
       .finally(() => setLoading(false))
   }, [shopId, toast])
 
@@ -77,11 +79,11 @@ export default function ItemList() {
   const toggle = (key) => () => setExtra((e) => ({ ...e, [key]: !e[key] }))
 
   const doPrint = async () => {
-    if (!rows.length) return toast.error('Nothing to print.')
+    if (!rows.length) return toast.error(t('Nothing to print.'))
     setPrinting(true)
     try {
       await nextFrame()
-      if (!(await portalReady())) return toast.error('The list did not render — nothing was printed.')
+      if (!(await portalReady())) return toast.error(t('The list did not render — nothing was printed.'))
       await printPortal('A4', A4_CSS)
     } finally {
       setPrinting(false)
@@ -98,85 +100,85 @@ export default function ItemList() {
   return (
     <div className="grid" style={{ gridTemplateColumns: '320px minmax(0,1fr)', alignItems: 'start', gap: 16 }}>
       <div className="card">
-        <div className="card-head"><h3>What to print</h3></div>
+        <div className="card-head"><h3>{t('What to print')}</h3></div>
         <div className="card-body">
-          <Field label="Search">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, SKU or barcode" />
+          <Field label={t('Search')}>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Name, SKU or barcode')} />
           </Field>
 
-          <Field label="Category">
+          <Field label={t('Category')}>
             <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">All categories</option>
+              <option value="">{t('All categories')}</option>
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
 
-          <Field label="Sort by">
+          <Field label={t('Sort by')}>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="name">Product name</option>
-              <option value="sku">SKU / item code</option>
+              <option value="name">{t('Product name')}</option>
+              <option value="sku">{t('SKU / item code')}</option>
             </select>
           </Field>
 
-          <Field label="Print as">
+          <Field label={t('Print as')}>
             <select value={style} onChange={(e) => setStyle(e.target.value)}>
-              <option value="cards">Cut-out blocks (name, then SKU)</option>
-              <option value="table">Table with row numbers</option>
+              <option value="cards">{t('Cut-out blocks (name, then SKU)')}</option>
+              <option value="table">{t('Table with row numbers')}</option>
             </select>
           </Field>
 
           {style === 'cards' && (
-            <Field label="Blocks across the page">
+            <Field label={t('Blocks across the page')}>
               <select value={columns} onChange={(e) => setColumns(Number(e.target.value))}>
-                {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n} across</option>)}
+                {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{t('{n} across', { n })}</option>)}
               </select>
             </Field>
           )}
 
-          <Field label="Also show" hint="Name and SKU are always printed.">
+          <Field label={t('Also show')} hint={t('Name and SKU are always printed.')}>
             <div style={{ display: 'grid', gap: 6 }}>
-              <label className="checkbox"><input type="checkbox" checked={extra.barcode} onChange={toggle('barcode')} /> Barcode</label>
-              <label className="checkbox"><input type="checkbox" checked={extra.category} onChange={toggle('category')} /> Category</label>
-              <label className="checkbox"><input type="checkbox" checked={extra.price} onChange={toggle('price')} /> Selling price</label>
-              <label className="checkbox"><input type="checkbox" checked={extra.stock} onChange={toggle('stock')} /> Stock</label>
+              <label className="checkbox"><input type="checkbox" checked={extra.barcode} onChange={toggle('barcode')} /> {t('Barcode')}</label>
+              <label className="checkbox"><input type="checkbox" checked={extra.category} onChange={toggle('category')} /> {t('Category')}</label>
+              <label className="checkbox"><input type="checkbox" checked={extra.price} onChange={toggle('price')} /> {t('Selling price')}</label>
+              <label className="checkbox"><input type="checkbox" checked={extra.stock} onChange={toggle('stock')} /> {t('Stock')}</label>
             </div>
           </Field>
 
-          <Field label="Layout">
+          <Field label={t('Layout')}>
             <div style={{ display: 'grid', gap: 6 }}>
               <label className="checkbox">
                 <input type="checkbox" checked={groupByCategory} onChange={(e) => setGroupByCategory(e.target.checked)} />
-                Group by category
+                {t('Group by category')}
               </label>
               <label className="checkbox">
                 <input type="checkbox" checked={showHeading} onChange={(e) => setShowHeading(e.target.checked)} />
-                Shop name and date at the top
+                {t('Shop name and date at the top')}
               </label>
               <label className="checkbox">
                 <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} />
-                Include inactive products
+                {t('Include inactive products')}
               </label>
             </div>
           </Field>
 
           <button type="button" className="btn btn-block" onClick={doPrint} disabled={printing || !rows.length}>
-            {printing && <span className="spinner" />} 🖨 Print {rows.length || ''} items (A4)
+            {printing && <span className="spinner" />} {t('🖨 Print {n} items (A4)', { n: rows.length || '' })}
           </button>
           <p className="text-sm mt-2" style={{ color: 'var(--text-3)', marginBottom: 0 }}>
-            Choose “Save as PDF” in the print dialog to get a file instead.
+            {t('Choose “Save as PDF” in the print dialog to get a file instead.')}
           </p>
         </div>
       </div>
 
       <div className="card">
         <div className="card-head">
-          <h3>Preview</h3>
-          <span className="spacer text-sm" style={{ color: 'var(--text-3)' }}>{rows.length} items</span>
+          <h3>{t('Preview')}</h3>
+          <span className="spacer text-sm" style={{ color: 'var(--text-3)' }}>{t('{n} items', { n: rows.length })}</span>
         </div>
         <div className="card-body" style={{ background: 'var(--surface-2)', overflowX: 'auto' }}>
-          {shopId && loading && <Loading label="Loading products…" />}
+          {shopId && loading && <Loading label={t('Loading products…')} />}
           {shopId && !loading && !rows.length && (
-            <Empty icon="📦" title="No products" message="Nothing matches — clear the filters or add products." />
+            <Empty icon="📦" title={t('No products')} message={t('Nothing matches — clear the filters or add products.')} />
           )}
           {shopId && !loading && rows.length > 0 && (
             <div className="item-sheet-preview">{sheet}</div>

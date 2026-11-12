@@ -7,6 +7,7 @@ import { isDesktop, saveLabelsPdf, revealFile } from '../utils/desktop'
 import { Empty, Loading, Field } from '../components/ui'
 import Pagination, { usePagination } from '../components/Pagination'
 import LabelSheetPortal, { LabelCell, LABEL_SIZES, BAR_WIDTHS, barMm } from '../components/LabelSheet'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 
 /**
  * Batch barcode label printing: pick products, set how many stickers each
@@ -15,6 +16,7 @@ import LabelSheetPortal, { LabelCell, LABEL_SIZES, BAR_WIDTHS, barMm } from '../
 export default function Labels() {
   const { shopId, shop, currency } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,7 +52,7 @@ export default function Labels() {
     try {
       setProducts(await listProducts(shopId))
     } catch {
-      toast.error('Could not load products.')
+      toast.error(tr('Could not load products.'))
     } finally {
       setLoading(false)
     }
@@ -84,7 +86,7 @@ export default function Labels() {
 
   /** Writes the sheet to Downloads as an A4 PDF. */
   const doDownload = async () => {
-    if (!totalLabels) return toast.error('Set a label count on at least one product.')
+    if (!totalLabels) return toast.error(t('Set a label count on at least one product.'))
 
     setPrinting(true)
     setSavedPath('')
@@ -92,7 +94,7 @@ export default function Labels() {
       // The sheet is rendered into the print portal; wait for it to commit.
       await nextFrame()
       if (!(await portalReady())) {
-        toast.error('The label sheet did not render.')
+        toast.error(t('The label sheet did not render.'))
         return
       }
 
@@ -102,11 +104,11 @@ export default function Labels() {
       })
 
       if (!result.ok) {
-        toast.error(result.error || 'Could not save the PDF.')
+        toast.error(result.error || t('Could not save the PDF.'))
         return
       }
       setSavedPath(result.path)
-      toast.success('Saved to your Downloads folder.')
+      toast.success(t('Saved to your Downloads folder.'))
     } finally {
       setPrinting(false)
     }
@@ -115,11 +117,11 @@ export default function Labels() {
 
   /** Browser fallback — the print dialog offers "Save as PDF". */
   const doPrint = async () => {
-    if (!totalLabels) return toast.error('Set a label count on at least one product.')
+    if (!totalLabels) return toast.error(t('Set a label count on at least one product.'))
     setPrinting(true)
     try {
       if (!(await printLabels(LABEL_SIZES[size].columns))) {
-        toast.error('The label sheet did not render — nothing was sent to the printer.')
+        toast.error(t('The label sheet did not render — nothing was sent to the printer.'))
       }
     } finally {
       setPrinting(false)
@@ -131,11 +133,11 @@ export default function Labels() {
     const next = {}
     products.forEach((p) => { if (p.stock > 0) next[p.id] = Math.min(p.stock, 200) })
     setCopies(next)
-    toast.info('Label counts set to match current stock.')
+    toast.info(t('Label counts set to match current stock.'))
   }
 
   const pager = usePagination(rows)
-  if (loading) return <Loading label="Loading products…" />
+  if (loading) return <Loading label={t('Loading products…')} />
 
   const previewItems = selected.slice(0, 3)
 
@@ -146,25 +148,25 @@ export default function Labels() {
           <div className="card-head">
             <div className="search-box">
               <span className="ico">🔍</span>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search products…')} />
             </div>
             <div className="spacer flex gap-2">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={fillFromStock}>Match stock</button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setCopies({})}>Clear</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={fillFromStock}>{t('Match stock')}</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setCopies({})}>{t('Clear')}</button>
             </div>
           </div>
           <div className="card-body tight">
             {rows.length === 0 ? (
-              <Empty icon="🏷️" title="No products" message="Add products before printing labels." />
+              <Empty icon="🏷️" title={t('No products')} message={t('Add products before printing labels.')} />
             ) : (
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Product</th>
-                      <th>Barcode</th>
-                      <th className="num">In stock</th>
-                      <th className="num" style={{ width: 120 }}>Labels</th>
+                      <th>{t('Product')}</th>
+                      <th>{t('Barcode')}</th>
+                      <th className="num">{t('In stock')}</th>
+                      <th className="num" style={{ width: 120 }}>{t('Labels')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -172,9 +174,9 @@ export default function Labels() {
                       <tr key={p.id}>
                         <td>
                           <div className="cell-title">{p.name}</div>
-                          <div className="cell-sub">{p.category || 'Uncategorised'}</div>
+                          <div className="cell-sub">{p.category || t('Uncategorised')}</div>
                         </td>
-                        <td className="mono text-sm">{p.barcode || <span className="text-red">missing</span>}</td>
+                        <td className="mono text-sm">{p.barcode || <span className="text-red">{t('missing')}</span>}</td>
                         <td className="num">{p.stock ?? 0}</td>
                         <td className="num">
                           <input
@@ -197,24 +199,24 @@ export default function Labels() {
         </div>
 
         <div className="card" style={{ position: 'sticky', top: 76 }}>
-          <div className="card-head"><h2>Label setup</h2></div>
+          <div className="card-head"><h2>{t('Label setup')}</h2></div>
           <div className="card-body">
-            <Field label="Label size">
+            <Field label={t('Label size')}>
               <select value={size} onChange={(e) => setSize(e.target.value)}>
                 {Object.entries(LABEL_SIZES).map(([key, v]) => (
-                  <option key={key} value={key}>{v.label}</option>
+                  <option key={key} value={key}>{t(v.label)}</option>
                 ))}
               </select>
             </Field>
 
             <Field
-              label="Barcode width"
-              hint={`Bars ${barMm(effectiveBar).toFixed(2)}mm thick. Narrower bars are harder to scan.`}
+              label={t('Barcode width')}
+              hint={t('Bars {mm}mm thick. Narrower bars are harder to scan.', { mm: barMm(effectiveBar).toFixed(2) })}
             >
               <select value={barWidth} onChange={(e) => setBarWidth(Number(e.target.value))}>
                 {BAR_WIDTHS.map((b) => (
                   <option key={b.value} value={b.value}>
-                    {b.value ? `${b.label} — ${barMm(b.value).toFixed(2)}mm bars` : b.label}
+                    {b.value ? t('{label} — {mm}mm bars', { label: t(b.label), mm: barMm(b.value).toFixed(2) }) : t(b.label)}
                   </option>
                 ))}
               </select>
@@ -226,29 +228,29 @@ export default function Labels() {
                 <span>!</span>
                 <span>
                   {barStep.risk === 'high'
-                    ? 'Many scanners cannot read bars this thin. '
-                    : 'Some scanners struggle with bars this thin. '}
-                  Print one label and scan it before printing a full sheet.
+                    ? t('Many scanners cannot read bars this thin.')
+                    : t('Some scanners struggle with bars this thin.')}{' '}
+                  {t('Print one label and scan it before printing a full sheet.')}
                 </span>
               </div>
             )}
 
             <div className="field">
-              <label>Show on label</label>
+              <label>{t('Show on label')}</label>
               <label className="checkbox mb-3">
-                <input type="checkbox" checked={showShop} onChange={(e) => setShowShop(e.target.checked)} /> Shop name
+                <input type="checkbox" checked={showShop} onChange={(e) => setShowShop(e.target.checked)} /> {t('Shop name')}
               </label>
               <label className="checkbox mb-3">
-                <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} /> Product name
+                <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} /> {t('Product name')}
               </label>
               <label className="checkbox">
-                <input type="checkbox" checked={showPrice} onChange={(e) => setShowPrice(e.target.checked)} /> Price
+                <input type="checkbox" checked={showPrice} onChange={(e) => setShowPrice(e.target.checked)} /> {t('Price')}
               </label>
             </div>
 
             {previewItems.length > 0 && (
               <div className="field">
-                <label>Preview</label>
+                <label>{t('Preview')}</label>
                 <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
                   {previewItems.map(({ product }) => (
                     <LabelCell
@@ -270,13 +272,12 @@ export default function Labels() {
             <div className="alert alert-blue mb-4">
               <span>🖨</span>
               <span>
-                Print at 100% scale with margins set to “None” so the barcodes keep their
-                exact width — scanners are sensitive to this.
+                {t('Print at 100% scale with margins set to “None” so the barcodes keep their exact width — scanners are sensitive to this.')}
               </span>
             </div>
 
             <div className="totals-row grand" style={{ fontSize: 16 }}>
-              <span>Labels</span>
+              <span>{t('Labels')}</span>
               <span>{totalLabels}</span>
             </div>
 
@@ -284,28 +285,28 @@ export default function Labels() {
               <>
                 <button type="button" className="btn btn-lg btn-block mt-3" onClick={doDownload}
                   disabled={!totalLabels || printing}>
-                  {printing && <span className="spinner" />} ⬇ Download A4 PDF
-                  {totalLabels ? ` (${totalLabels} labels)` : ''}
+                  {printing && <span className="spinner" />} {t('⬇ Download A4 PDF')}
+                  {totalLabels ? t(' ({n} labels)', { n: totalLabels }) : ''}
                 </button>
 
                 {savedPath && (
                   <div className="alert alert-blue mt-3" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-                    <span style={{ wordBreak: 'break-all' }}>Saved to <strong>{savedPath}</strong></span>
+                    <span style={{ wordBreak: 'break-all' }}>{t('Saved to')} <strong>{savedPath}</strong></span>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => revealFile(savedPath)}>
-                      Open folder
+                      {t('Open folder')}
                     </button>
                   </div>
                 )}
 
                 <button type="button" className="btn btn-ghost btn-block mt-2" onClick={doPrint}
                   disabled={!totalLabels || printing}>
-                  🖨 Print instead
+                  {t('🖨 Print instead')}
                 </button>
               </>
             ) : (
               <button type="button" className="btn btn-lg btn-block mt-3" onClick={doPrint}
                 disabled={!totalLabels || printing}>
-                {printing && <span className="spinner" />} 🖨 Print {totalLabels || ''} labels
+                {printing && <span className="spinner" />} {t('🖨 Print {n} labels', { n: totalLabels || '' })}
               </button>
             )}
           </div>

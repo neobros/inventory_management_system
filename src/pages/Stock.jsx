@@ -8,6 +8,7 @@ import { entryUnits, formatQty, isMeasured, roundQty, toProductUnit } from '../u
 import { Modal, Field, Empty, Loading, StockBadge } from '../components/ui'
 import { batchesOf, lastCostOf } from '../utils/batches'
 import Pagination, { usePagination } from '../components/Pagination'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 
 const TYPE_META = {
   in: { label: 'Stock in', badge: 'badge-green', sign: '+' },
@@ -19,6 +20,7 @@ const TYPE_META = {
 export default function Stock() {
   const { shopId, profile, currency } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
 
   const [products, setProducts] = useState([])
   const [movements, setMovements] = useState([])
@@ -37,7 +39,7 @@ export default function Stock() {
       setProducts(p)
       setMovements(m)
     } catch {
-      toast.error('Could not load stock data.')
+      toast.error(tr('Could not load stock data.'))
     } finally {
       setLoading(false)
     }
@@ -66,7 +68,7 @@ export default function Stock() {
     setScan('')
     const hit = products.find((p) => p.barcode === code || p.sku === code)
     if (hit) openFor(hit, 'in')
-    else toast.error(`No product matches ${code}`)
+    else toast.error(t('No product matches {code}', { code }))
   }
 
   const submit = async (e) => {
@@ -74,19 +76,19 @@ export default function Stock() {
     const unit = form.product.unit || 'pcs'
     const typed = Number(form.quantity)
     if (form.quantity === '' || !Number.isFinite(typed) || typed < 0 || (form.type !== 'adjust' && typed <= 0)) {
-      return toast.error('Enter a quantity greater than zero.')
+      return toast.error(t('Enter a quantity greater than zero.'))
     }
     if (!isMeasured(unit) && !Number.isInteger(typed)) {
-      return toast.error(`${unit} must be a whole number. Use kg, g, litre, ml, meter, feet or yard for part amounts.`)
+      return toast.error(t('{unit} must be a whole number. Use kg, g, litre, ml, meter, feet or yard for part amounts.', { unit }))
     }
     const qty = toProductUnit(typed, form.entryUnit, unit)
     if (form.type === 'out' && qty > roundQty(form.product.stock)) {
-      return toast.error(`Only ${formatQty(form.product.stock, unit)} in stock.`)
+      return toast.error(t('Only {qty} in stock.', { qty: formatQty(form.product.stock, unit) }))
     }
 
     if (form.type === 'in') {
-      if (form.cost === '' || !(Number(form.cost) >= 0)) return toast.error('Enter the cost price for this delivery (0 if free).')
-      if (!(Number(form.price) > 0)) return toast.error('Selling price must be greater than zero.')
+      if (form.cost === '' || !(Number(form.cost) >= 0)) return toast.error(t('Enter the cost price for this delivery (0 if free).'))
+      if (!(Number(form.price) > 0)) return toast.error(t('Selling price must be greater than zero.'))
     }
 
     setSaving(true)
@@ -104,11 +106,11 @@ export default function Stock() {
       setProducts((list) => list.map((p) => (p.id === id ? { ...p, ...done.product } : p)))
       setMovements((list) => [done.movement, ...list].slice(0, 250))
       toast.success(done.movement.newPrice
-        ? `Stock updated. Selling price is now ${money(done.movement.newPrice, currency)}.`
-        : 'Stock updated.')
+        ? t('Stock updated. Selling price is now {price}.', { price: money(done.movement.newPrice, currency) })
+        : t('Stock updated.'))
       setForm(null)
     } catch (err) {
-      toast.error(err.message || 'Could not update stock.')
+      toast.error(err.message || t('Could not update stock.'))
     } finally {
       setSaving(false)
     }
@@ -141,33 +143,33 @@ export default function Stock() {
     return (m) => m.unit || map.get(m.productId) || 'pcs'
   }, [products])
 
-  if (loading) return <Loading label="Loading stock movements…" />
+  if (loading) return <Loading label={t('Loading stock movements…')} />
 
   return (
     <>
       <form className="scan-bar no-print" onSubmit={onScan}>
         <span style={{ fontSize: 20 }}>📷</span>
         <input className="input-lg mono" value={scan} onChange={(e) => setScan(e.target.value)}
-          placeholder="Scan a product barcode to receive stock" autoComplete="off" />
-        <button type="submit" className="btn">Find</button>
+          placeholder={t('Scan a product barcode to receive stock')} autoComplete="off" />
+        <button type="submit" className="btn">{t('Find')}</button>
       </form>
 
       <div className="card mb-4">
         <div className="card-head">
-          <h2>Quick stock update</h2>
+          <h2>{t('Quick stock update')}</h2>
           <div className="search-box spacer">
             <span className="ico">🔍</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products or movements…" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search products or movements…')} />
           </div>
         </div>
         <div className="card-body tight">
           {productRows.length === 0 ? (
-            <Empty icon="📦" title="No products found" />
+            <Empty icon="📦" title={t('No products found')} />
           ) : (
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Product</th><th>Barcode</th><th>Stock</th><th className="num">Update</th></tr>
+                  <tr><th>{t('Product')}</th><th>{t('Barcode')}</th><th>{t('Stock')}</th><th className="num">{t('Update')}</th></tr>
                 </thead>
                 <tbody>
                   {productRows.map((p) => (
@@ -176,9 +178,9 @@ export default function Stock() {
                       <td className="mono text-sm">{p.barcode || '—'}</td>
                       <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} unit={p.unit} /></td>
                       <td className="num nowrap">
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'in')}>+ In</button>{' '}
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'out')}>− Out</button>{' '}
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'adjust')}>Set</button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'in')}>{t('+ In')}</button>{' '}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'out')}>{t('− Out')}</button>{' '}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openFor(p, 'adjust')}>{t('Set')}</button>
                       </td>
                     </tr>
                   ))}
@@ -191,24 +193,24 @@ export default function Stock() {
 
       <div className="card">
         <div className="card-head">
-          <h2>Movement history</h2>
+          <h2>{t('Movement history')}</h2>
           <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: 160 }} className="spacer">
-            <option value="all">All movements</option>
-            <option value="in">Stock in</option>
-            <option value="out">Stock out</option>
-            <option value="adjust">Adjustments</option>
-            <option value="sale">Sales</option>
+            <option value="all">{t('All movements')}</option>
+            <option value="in">{t('Stock in')}</option>
+            <option value="out">{t('Stock out')}</option>
+            <option value="adjust">{t('Adjustments')}</option>
+            <option value="sale">{t('Sales')}</option>
           </select>
         </div>
         <div className="card-body tight">
           {rows.length === 0 ? (
-            <Empty icon="🔄" title="No movements recorded"
-              message="Receiving stock, selling and adjustments all show up here." />
+            <Empty icon="🔄" title={t('No movements recorded')}
+              message={t('Receiving stock, selling and adjustments all show up here.')} />
           ) : (
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>When</th><th>Product</th><th>Type</th><th className="num">Qty</th><th>Note</th><th>By</th></tr>
+                  <tr><th>{t('When')}</th><th>{t('Product')}</th><th>{t('Type')}</th><th className="num">{t('Qty')}</th><th>{t('Note')}</th><th>{t('By')}</th></tr>
                 </thead>
                 <tbody>
                   {pager.slice.map((m) => {
@@ -217,7 +219,7 @@ export default function Stock() {
                       <tr key={m.id}>
                         <td className="text-sm text-muted nowrap">{formatDate(m.createdAt)}</td>
                         <td className="cell-title">{m.productName}</td>
-                        <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
+                        <td><span className={`badge ${meta.badge}`}>{t(meta.label)}</span></td>
                         <td className="num strong nowrap">{meta.sign}{formatQty(Math.abs(m.quantity), unitOf(m))}</td>
                         <td className="text-sm text-muted">{m.note || '—'}</td>
                         <td className="text-sm">{m.actor || '—'}</td>
@@ -235,30 +237,30 @@ export default function Stock() {
       {form && (
         <Modal
           title={form.product.name}
-          subtitle={`Currently ${formatQty(form.product.stock ?? 0, form.product.unit || 'pcs')} in stock`}
+          subtitle={t('Currently {qty} in stock', { qty: formatQty(form.product.stock ?? 0, form.product.unit || 'pcs') })}
           onClose={() => setForm(null)}
           footer={
             <>
-              <button type="button" className="btn btn-ghost" onClick={() => setForm(null)} disabled={saving}>Cancel</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setForm(null)} disabled={saving}>{t('Cancel')}</button>
               <button type="submit" form="stock-form" className="btn" disabled={saving}>
-                {saving && <span className="spinner" />} Update stock
+                {saving && <span className="spinner" />} {t('Update stock')}
               </button>
             </>
           }
         >
           <form id="stock-form" onSubmit={submit}>
-            <Field label="Movement type">
+            <Field label={t('Movement type')}>
               <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                <option value="in">Stock in — goods received</option>
-                <option value="out">Stock out — damage, return, wastage</option>
-                <option value="adjust">Set exact count — stock take</option>
+                <option value="in">{t('Stock in — goods received')}</option>
+                <option value="out">{t('Stock out — damage, return, wastage')}</option>
+                <option value="adjust">{t('Set exact count — stock take')}</option>
               </select>
             </Field>
 
             <Field
-              label={form.type === 'adjust' ? 'Counted quantity' : 'Quantity'}
+              label={form.type === 'adjust' ? t('Counted quantity') : t('Quantity')}
               required
-              hint={form.type === 'adjust' ? 'The stock level will be set to exactly this number.' : undefined}
+              hint={form.type === 'adjust' ? t('The stock level will be set to exactly this number.') : undefined}
             >
               <div className="row" style={{ gap: 8 }}>
                 <input
@@ -266,7 +268,7 @@ export default function Stock() {
                   step={isMeasured(form.product.unit) ? 'any' : '1'}
                   value={form.quantity}
                   onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
-                  placeholder={isMeasured(form.product.unit) ? 'e.g. 0.5' : '0'}
+                  placeholder={isMeasured(form.product.unit) ? t('e.g. 0.5') : '0'}
                   autoFocus required
                 />
                 <select value={form.entryUnit} style={{ flex: 'none', width: 100 }}
@@ -290,16 +292,16 @@ export default function Stock() {
 
             {batchesOf(form.product).length > 1 && (
               <div className="text-sm text-muted" style={{ marginTop: -6, marginBottom: 14 }}>
-                In stock by cost (oldest sells first):{' '}
+                {t('In stock by cost (oldest sells first):')}{' '}
                 {batchesOf(form.product)
                   .map((b) => `${formatQty(b.qty, form.product.unit || 'pcs')} @ ${money(b.cost, currency)}`)
                   .join(' · ')}
               </div>
             )}
 
-            <Field label="Note" hint="Supplier name, invoice number, reason for wastage…">
+            <Field label={t('Note')} hint={t('Supplier name, invoice number, reason for wastage…')}>
               <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-                placeholder="Optional" />
+                placeholder={t('Optional')} />
             </Field>
           </form>
         </Modal>
@@ -313,8 +315,9 @@ export default function Stock() {
  * A new cost becomes its own batch; a new selling price applies to all stock.
  */
 function StockInPrices({ form, setForm, currency }) {
+  const { t } = useLang()
   const unit = form.product.unit || 'pcs'
-  const per = isMeasured(unit) ? `per ${unit}` : 'each'
+  const per = isMeasured(unit) ? t('per {unit}', { unit }) : t('each')
   const oldCost = lastCostOf(form.product)
   const onHand = roundQty(form.product.stock)
   const costChanged = form.cost !== '' && Number(form.cost) !== oldCost && onHand > 0
@@ -323,11 +326,11 @@ function StockInPrices({ form, setForm, currency }) {
   return (
     <>
       <div className="row">
-        <Field label={`Cost price (${per})`} hint={`Last paid ${money(oldCost, currency)}`}>
+        <Field label={t('Cost price ({per})', { per })} hint={t('Last paid {amount}', { amount: money(oldCost, currency) })}>
           <input type="number" step="0.01" min="0" value={form.cost}
             onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))} />
         </Field>
-        <Field label={`Selling price (${per})`} hint={`Now ${money(form.product.price, currency)}`}>
+        <Field label={t('Selling price ({per})', { per })} hint={t('Now {amount}', { amount: money(form.product.price, currency) })}>
           <input type="number" step="0.01" min="0" value={form.price}
             onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} />
         </Field>
@@ -336,8 +339,7 @@ function StockInPrices({ form, setForm, currency }) {
         <div className="alert alert-blue" style={{ marginTop: -6, marginBottom: 14 }}>
           <span>ℹ</span>
           <span>
-            New cost is kept separate. The {formatQty(onHand, unit)} already in stock sells first at
-            its old cost, then this delivery at {money(form.cost, currency)}.
+            {t('New cost is kept separate. The {qty} already in stock sells first at its old cost, then this delivery at {cost}.', { qty: formatQty(onHand, unit), cost: money(form.cost, currency) })}
           </span>
         </div>
       )}
@@ -345,8 +347,7 @@ function StockInPrices({ form, setForm, currency }) {
         <div className="alert alert-amber" style={{ marginTop: -6, marginBottom: 14 }}>
           <span>!</span>
           <span>
-            All stock of this item sells at {money(form.price, currency)} from now on. Bills already
-            made keep their old price.
+            {t('All stock of this item sells at {price} from now on. Bills already made keep their old price.', { price: money(form.price, currency) })}
           </span>
         </div>
       )}

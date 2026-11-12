@@ -9,6 +9,7 @@ import { fileToLogo } from '../../utils/image'
 import { authError, formatDate } from '../../utils/format'
 import { Modal, ConfirmDialog, Field, Empty, Loading, Stat } from '../../components/ui'
 import Pagination, { usePagination } from '../../components/Pagination'
+import { useLang, translate as tr } from '../../i18n/LanguageContext'
 
 const BLANK = {
   name: '', email: '', password: '',
@@ -24,6 +25,7 @@ const BLANK = {
 export default function AdminShops() {
   const { profile } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
   const fileRef = useRef(null)
 
   const [shops, setShops] = useState([])
@@ -50,7 +52,7 @@ export default function AdminShops() {
     try {
       setShops(await listShops())
     } catch {
-      toast.error('Could not load shops.')
+      toast.error(tr('Could not load shops.'))
     } finally {
       setLoading(false)
     }
@@ -87,8 +89,8 @@ export default function AdminShops() {
 
   const submitCreate = async (e) => {
     e.preventDefault()
-    if (!form.name.trim()) return toast.error('Shop name is required.')
-    if (form.password.length < 6) return toast.error('Password must be at least 6 characters.')
+    if (!form.name.trim()) return toast.error(t('Shop name is required.'))
+    if (form.password.length < 6) return toast.error(t('Password must be at least 6 characters.'))
 
     setSaving(true)
     try {
@@ -101,7 +103,7 @@ export default function AdminShops() {
         email: form.email.trim(),
         password: form.password,
       })
-      toast.success(`${form.name} is live. Share the login with the owner.`)
+      toast.success(t('{name} is live. Share the login with the owner.', { name: form.name }))
       setCreating(false)
       await load()
     } catch (err) {
@@ -120,11 +122,11 @@ export default function AdminShops() {
         taxRate: Number(form.taxRate) || 0, phone: form.phone, address: form.address,
         logo: form.logo, receiptFooter: form.receiptFooter,
       })
-      toast.success('Shop updated.')
+      toast.success(t('Shop updated.'))
       setEditing(null)
       await load()
     } catch (err) {
-      toast.error(err.message || 'Could not update the shop.')
+      toast.error(err.message || t('Could not update the shop.'))
     } finally {
       setSaving(false)
     }
@@ -133,21 +135,21 @@ export default function AdminShops() {
   const toggle = async (shop) => {
     try {
       await setShopActive(shop.id, shop.active === false)
-      toast.success(shop.active === false ? 'Shop reactivated.' : 'Shop suspended.')
+      toast.success(shop.active === false ? t('Shop reactivated.') : t('Shop suspended.'))
       await load()
     } catch {
-      toast.error('Could not change the shop status.')
+      toast.error(t('Could not change the shop status.'))
     }
   }
 
   const confirmDelete = async () => {
     try {
       await deleteShop(deleting.id)
-      toast.success('Shop record deleted.')
+      toast.success(t('Shop record deleted.'))
       setDeleting(null)
       await load()
     } catch {
-      toast.error('Could not delete the shop.')
+      toast.error(t('Could not delete the shop.'))
     }
   }
 
@@ -175,7 +177,7 @@ export default function AdminShops() {
       setApiUp(await adminApiAvailable())
       setCreds(await getShopCredentials(shop.id))
     } catch {
-      toast.error('Could not read the stored login.')
+      toast.error(t('Could not read the stored login.'))
     } finally {
       setCredsLoading(false)
     }
@@ -184,15 +186,15 @@ export default function AdminShops() {
   const copyText = async (text, label) => {
     try {
       await navigator.clipboard.writeText(text)
-      toast.success(`${label} copied.`)
+      toast.success(t('{label} copied.', { label }))
     } catch {
-      toast.error('Could not copy — select the text and copy manually.')
+      toast.error(t('Could not copy — select the text and copy manually.'))
     }
   }
 
   const submitPassword = async (e) => {
     e.preventDefault()
-    if (newPassword.trim().length < 6) return toast.error('Password must be at least 6 characters.')
+    if (newPassword.trim().length < 6) return toast.error(t('Password must be at least 6 characters.'))
 
     setPwBusy(true)
     try {
@@ -216,9 +218,9 @@ export default function AdminShops() {
       setCreds({ email: loginFor.ownerEmail, password: newPassword.trim(), updatedAt: new Date() })
       setNewPassword('')
       setReveal(true)
-      toast.success('Password changed. Give the shop their new password.')
+      toast.success(t('Password changed. Give the shop their new password.'))
     } catch (err) {
-      toast.error(err.message || 'Could not change the password.')
+      toast.error(err.message || t('Could not change the password.'))
     } finally {
       setPwBusy(false)
     }
@@ -226,17 +228,17 @@ export default function AdminShops() {
 
   const brandingFields = (
     <>
-      <Field label="Shop logo / icon" hint="Appears in the shop's sidebar and on its printed bills.">
+      <Field label={t('Shop logo / icon')} hint={t("Appears in the shop's sidebar and on its printed bills.")}>
         <div className="flex gap-3 items-center">
           <div className="sidebar-logo" style={{ width: 54, height: 54, fontSize: 22 }}>
             {form.logo
               ? <img src={form.logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : (form.name || 'S').charAt(0).toUpperCase()}
           </div>
-          <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()}>Upload</button>
+          <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()}>{t('Upload')}</button>
           {form.logo && (
             <button type="button" className="btn btn-ghost" onClick={() => setForm((f) => ({ ...f, logo: '' }))}>
-              Remove
+              {t('Remove')}
             </button>
           )}
           <input ref={fileRef} type="file" accept="image/*" onChange={pickLogo} style={{ display: 'none' }} />
@@ -244,25 +246,25 @@ export default function AdminShops() {
       </Field>
 
       <div className="row">
-        <Field label="Currency symbol">
+        <Field label={t('Currency symbol')}>
           <input value={form.currency} onChange={set('currency')} maxLength={5} />
         </Field>
-        <Field label="Receipt paper">
+        <Field label={t('Receipt paper')}>
           <select value={form.paperSize} onChange={set('paperSize')}>
-            <option value="80mm">80mm thermal</option>
-            <option value="75mm">75mm roll</option>
-            <option value="58mm">58mm thermal</option>
+            <option value="80mm">{t('80mm thermal')}</option>
+            <option value="75mm">{t('75mm roll')}</option>
+            <option value="58mm">{t('58mm thermal')}</option>
             <option value="A4">A4</option>
           </select>
         </Field>
-        <Field label="Tax rate %">
+        <Field label={t('Tax rate %')}>
           <input type="number" step="0.01" min="0" max="100" value={form.taxRate} onChange={set('taxRate')} />
         </Field>
       </div>
 
       <div className="row">
-        <Field label="Phone"><input value={form.phone} onChange={set('phone')} /></Field>
-        <Field label="Address"><input value={form.address} onChange={set('address')} /></Field>
+        <Field label={t('Phone')}><input value={form.phone} onChange={set('phone')} /></Field>
+        <Field label={t('Address')}><input value={form.address} onChange={set('address')} /></Field>
       </div>
     </>
   )
@@ -270,10 +272,10 @@ export default function AdminShops() {
   return (
     <>
       <div className="grid grid-4 mb-4">
-        <Stat label="Shops on platform" value={shops.length} icon="🏬" tone="brand" />
-        <Stat label="Active" value={active} foot={`${shops.length - active} suspended`} icon="✅" tone="green" />
-        <Stat label="Signed in as" value="Super Admin" foot={profile?.email} icon="★" tone="blue" />
-        <Stat label="New this month"
+        <Stat label={t('Shops on platform')} value={shops.length} icon="🏬" tone="brand" />
+        <Stat label={t('Active')} value={active} foot={t('{n} suspended', { n: shops.length - active })} icon="✅" tone="green" />
+        <Stat label={t('Signed in as')} value={t('Super Admin')} foot={profile?.email} icon="★" tone="blue" />
+        <Stat label={t('New this month')}
           value={shops.filter((s) => {
             const d = s.createdAt?.toDate?.()
             return d && d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear()
@@ -285,21 +287,21 @@ export default function AdminShops() {
         <div className="card-head">
           <div className="search-box">
             <span className="ico">🔍</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search shops or owner email…" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search shops or owner email…')} />
           </div>
-          <button type="button" className="btn spacer" onClick={openCreate}>+ Create shop</button>
+          <button type="button" className="btn spacer" onClick={openCreate}>{t('+ Create shop')}</button>
         </div>
 
         <div className="card-body tight">
           {rows.length === 0 ? (
-            <Empty icon="🏬" title={shops.length ? 'No shops match that search' : 'No shops yet'}
-              message={shops.length ? undefined : 'Create your first tenant to get started.'}
-              action={!shops.length && <button type="button" className="btn" onClick={openCreate}>+ Create shop</button>} />
+            <Empty icon="🏬" title={shops.length ? t('No shops match that search') : t('No shops yet')}
+              message={shops.length ? undefined : t('Create your first tenant to get started.')}
+              action={!shops.length && <button type="button" className="btn" onClick={openCreate}>{t('+ Create shop')}</button>} />
           ) : (
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Shop</th><th>Owner login</th><th>Currency</th><th>Receipt</th><th>Status</th><th>Created</th><th className="num">Actions</th></tr>
+                  <tr><th>{t('Shop')}</th><th>{t('Owner login')}</th><th>{t('Currency')}</th><th>{t('Receipt')}</th><th>{t('Status')}</th><th>{t('Created')}</th><th className="num">{t('Actions')}</th></tr>
                 </thead>
                 <tbody>
                   {pager.slice.map((s) => (
@@ -322,17 +324,17 @@ export default function AdminShops() {
                       <td className="text-sm">{s.paperSize}</td>
                       <td>
                         <span className={`badge ${s.active === false ? 'badge-red' : 'badge-green'}`}>
-                          {s.active === false ? 'Suspended' : 'Active'}
+                          {s.active === false ? t('Suspended') : t('Active')}
                         </span>
                       </td>
                       <td className="text-sm text-muted nowrap">{formatDate(s.createdAt, false)}</td>
                       <td className="num nowrap">
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openLogin(s)}>🔑 Login</button>{' '}
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(s)}>Edit</button>{' '}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openLogin(s)}>{t('🔑 Login')}</button>{' '}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(s)}>{t('Edit')}</button>{' '}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => toggle(s)}>
-                          {s.active === false ? 'Activate' : 'Suspend'}
+                          {s.active === false ? t('Activate') : t('Suspend')}
                         </button>{' '}
-                        <button type="button" className="btn btn-icon" title="Delete" onClick={() => setDeleting(s)}>🗑</button>
+                        <button type="button" className="btn btn-icon" title={t('Delete')} onClick={() => setDeleting(s)}>🗑</button>
                       </td>
                     </tr>
                   ))}
@@ -347,23 +349,23 @@ export default function AdminShops() {
 
       {loginFor && (
         <Modal
-          title={`${loginFor.name} — shop login`}
-          subtitle="Credentials the shop uses to sign in to the till."
+          title={t('{name} — shop login', { name: loginFor.name })}
+          subtitle={t('Credentials the shop uses to sign in to the till.')}
           onClose={() => setLoginFor(null)}
-          footer={<button type="button" className="btn btn-ghost" onClick={() => setLoginFor(null)}>Close</button>}
+          footer={<button type="button" className="btn btn-ghost" onClick={() => setLoginFor(null)}>{t('Close')}</button>}
         >
-          <Field label="Email">
+          <Field label={t('Email')}>
             <div className="flex gap-2">
               <input value={loginFor.ownerEmail} readOnly className="mono" />
               <button type="button" className="btn btn-ghost nowrap"
-                onClick={() => copyText(loginFor.ownerEmail, 'Email')}>Copy</button>
+                onClick={() => copyText(loginFor.ownerEmail, t('Email'))}>{t('Copy')}</button>
             </div>
           </Field>
 
-          <Field label="Password">
+          <Field label={t('Password')}>
             {credsLoading ? (
               <div className="flex gap-2 items-center text-muted text-sm">
-                <span className="spinner spinner-dark" /> Loading…
+                <span className="spinner spinner-dark" /> {t('Loading…')}
               </div>
             ) : creds?.password ? (
               <>
@@ -371,29 +373,29 @@ export default function AdminShops() {
                   <input value={reveal ? creds.password : '•'.repeat(creds.password.length)}
                     readOnly className="mono" />
                   <button type="button" className="btn btn-ghost nowrap" onClick={() => setReveal((r) => !r)}>
-                    {reveal ? 'Hide' : 'Show'}
+                    {reveal ? t('Hide') : t('Show')}
                   </button>
                   <button type="button" className="btn btn-ghost nowrap"
-                    onClick={() => copyText(creds.password, 'Password')}>Copy</button>
+                    onClick={() => copyText(creds.password, t('Password'))}>{t('Copy')}</button>
                 </div>
                 {creds.updatedAt && (
-                  <div className="hint">Last set {formatDate(creds.updatedAt)}</div>
+                  <div className="hint">{t('Last set {date}', { date: formatDate(creds.updatedAt) })}</div>
                 )}
               </>
             ) : (
               <div className="text-sm text-muted">
-                Not recorded yet — reset it below and it will show here from then on.
+                {t('Not recorded yet — reset it below and it will show here from then on.')}
               </div>
             )}
           </Field>
 
           <form onSubmit={submitPassword} style={{ borderTop: '1px solid var(--border)', marginTop: 18, paddingTop: 18 }}>
-            <Field label="Reset password" hint="At least 6 characters. Tell the shop their new password.">
+            <Field label={t('Reset password')} hint={t('At least 6 characters. Tell the shop their new password.')}>
               <div className="flex gap-2">
                 <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New password" autoComplete="new-password" autoFocus />
+                  placeholder={t('New password')} autoComplete="new-password" autoFocus />
                 <button type="submit" className="btn nowrap" disabled={pwBusy || !newPassword.trim()}>
-                  {pwBusy && <span className="spinner" />} Reset
+                  {pwBusy && <span className="spinner" />} {t('Reset')}
                 </button>
               </div>
             </Field>
@@ -402,8 +404,7 @@ export default function AdminShops() {
               <div className="alert alert-amber">
                 <span>!</span>
                 <span>
-                  The admin service is not running, so this shop cannot be reset yet.
-                  Stop the app and start it again with <code>npm run dev</code>.
+                  {t('The admin service is not running, so this shop cannot be reset yet. Stop the app and start it again with')} <code>npm run dev</code>.
                 </span>
               </div>
             )}
@@ -412,10 +413,7 @@ export default function AdminShops() {
           <div className="alert alert-blue mt-4">
             <span>🔒</span>
             <span>
-              Firebase stores only a one-way hash of a password, so it can never be read
-              back. The copy shown here is the app's own, kept when you set it, and
-              readable by you alone. Shop owners cannot change their own password, which
-              is what keeps it accurate.
+              {t("Firebase stores only a one-way hash of a password, so it can never be read back. The copy shown here is the app's own, kept when you set it, and readable by you alone. Shop owners cannot change their own password, which is what keeps it accurate.")}
             </span>
           </div>
         </Modal>
@@ -424,35 +422,35 @@ export default function AdminShops() {
       {creating && (
         <Modal
           wide
-          title="Create a shop"
-          subtitle="This provisions the shop and its owner login in one step."
+          title={t('Create a shop')}
+          subtitle={t('This provisions the shop and its owner login in one step.')}
           onClose={() => setCreating(false)}
           footer={
             <>
-              <button type="button" className="btn btn-ghost" onClick={() => setCreating(false)} disabled={saving}>Cancel</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setCreating(false)} disabled={saving}>{t('Cancel')}</button>
               <button type="submit" form="shop-form" className="btn" disabled={saving}>
-                {saving && <span className="spinner" />} Create shop
+                {saving && <span className="spinner" />} {t('Create shop')}
               </button>
             </>
           }
         >
           <form id="shop-form" onSubmit={submitCreate}>
-            <Field label="Shop name" required>
-              <input value={form.name} onChange={set('name')} required autoFocus placeholder="e.g. Silva Super Mart" />
+            <Field label={t('Shop name')} required>
+              <input value={form.name} onChange={set('name')} required autoFocus placeholder={t('e.g. Silva Super Mart')} />
             </Field>
 
             <div className="row">
-              <Field label="Owner email" required hint="Their username at sign-in.">
+              <Field label={t('Owner email')} required hint={t('Their username at sign-in.')}>
                 <input type="email" value={form.email} onChange={set('email')} required placeholder="owner@shop.com" />
               </Field>
-              <Field label="Owner password" required hint="Minimum 6 characters.">
+              <Field label={t('Owner password')} required hint={t('Minimum 6 characters.')}>
                 <input type="text" className="mono" value={form.password} onChange={set('password')} required />
               </Field>
             </div>
 
             {brandingFields}
 
-            <Field label="Receipt footer">
+            <Field label={t('Receipt footer')}>
               <input value={form.receiptFooter} onChange={set('receiptFooter')} />
             </Field>
           </form>
@@ -462,31 +460,30 @@ export default function AdminShops() {
       {editing && (
         <Modal
           wide
-          title={`Edit — ${editing.name}`}
-          subtitle="Branding and billing setup. The owner can also change these from inside the shop."
+          title={t('Edit — {name}', { name: editing.name })}
+          subtitle={t('Branding and billing setup. The owner can also change these from inside the shop.')}
           onClose={() => setEditing(null)}
           footer={
             <>
-              <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)} disabled={saving}>Cancel</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)} disabled={saving}>{t('Cancel')}</button>
               <button type="submit" form="shop-edit-form" className="btn" disabled={saving}>
-                {saving && <span className="spinner" />} Save changes
+                {saving && <span className="spinner" />} {t('Save changes')}
               </button>
             </>
           }
         >
           <form id="shop-edit-form" onSubmit={submitEdit}>
-            <Field label="Shop name" required>
+            <Field label={t('Shop name')} required>
               <input value={form.name} onChange={set('name')} required autoFocus />
             </Field>
-            <Field label="Owner login">
+            <Field label={t('Owner login')}>
               <input value={form.email} disabled />
               <div className="hint">
-                The owner changes their own password from My Account, or resets it from the
-                sign-in screen.
+                {t('The owner changes their own password from My Account, or resets it from the sign-in screen.')}
               </div>
             </Field>
             {brandingFields}
-            <Field label="Receipt footer">
+            <Field label={t('Receipt footer')}>
               <input value={form.receiptFooter} onChange={set('receiptFooter')} />
             </Field>
           </form>
@@ -495,8 +492,9 @@ export default function AdminShops() {
 
       {deleting && (
         <ConfirmDialog
-          title="Delete shop"
-          message={`“${deleting.name}” will be removed from the platform and its staff will lose access. Products and sales stored under it are no longer reachable from the app. The owner's sign-in record stays in Firebase Authentication.`}
+          title={t('Delete shop')}
+          message={t("“{name}” will be removed from the platform and its staff will lose access. Products and sales stored under it are no longer reachable from the app. The owner's sign-in record stays in Firebase Authentication.", { name: deleting.name })}
+          confirmLabel={t('Delete')}
           onConfirm={confirmDelete}
           onClose={() => setDeleting(null)}
         />

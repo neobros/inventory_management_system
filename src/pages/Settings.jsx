@@ -8,8 +8,22 @@ import { Field, Loading } from '../components/ui'
 import { ReceiptBody } from '../components/Receipt'
 import { createPortal } from 'react-dom'
 import { shopMarkup } from '../utils/pricing'
+import { useLang } from '../i18n/LanguageContext'
 
 const CURRENCIES = ['Rs.', '$', '€', '£', '₹', '₦', '¥', 'AED', 'PKR', 'BDT', 'KES']
+
+/**
+ * Fills {key} markers in an already-translated sentence with React nodes, so a
+ * sentence with <code>/<strong> inside it can still be translated as a whole.
+ */
+function rich(text, parts) {
+  return text.split(/(\{\w+\})/).map((piece, i) => {
+    const key = piece.slice(1, -1)
+    return piece.startsWith('{') && parts[key] !== undefined
+      ? <span key={i}>{parts[key]}</span>
+      : piece
+  })
+}
 
 /** A representative bill used to preview receipt formatting changes live. */
 const SAMPLE = {
@@ -31,6 +45,7 @@ export default function Settings() {
   const { shop, shopId, refreshShop } = useAuth()
   const toast = useToast()
   const fileRef = useRef(null)
+  const { t } = useLang()
 
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -70,7 +85,7 @@ export default function Settings() {
     try {
       const logo = await fileToLogo(file)
       setForm((f) => ({ ...f, logo }))
-      toast.info('Logo ready — remember to save.')
+      toast.info(t('Logo ready — remember to save.'))
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -80,7 +95,7 @@ export default function Settings() {
 
   const save = async (e) => {
     e.preventDefault()
-    if (!form.name.trim()) return toast.error('Shop name is required.')
+    if (!form.name.trim()) return toast.error(t('Shop name is required.'))
     setSaving(true)
     try {
       await updateShop(shopId, {
@@ -91,9 +106,9 @@ export default function Settings() {
         markupPercent: form.markupPercent === '' ? null : Number(form.markupPercent) || 0,
       })
       await refreshShop()
-      toast.success('Settings saved.')
+      toast.success(t('Settings saved.'))
     } catch (err) {
-      toast.error(err.message || 'Could not save settings.')
+      toast.error(err.message || t('Could not save settings.'))
     } finally {
       setSaving(false)
     }
@@ -124,8 +139,8 @@ export default function Settings() {
         setQzState('absent')
         toast.error(
           isDesktop()
-            ? 'No printers are installed on this computer.'
-            : 'QZ Tray is not running on this computer. See docs/PRINTER-SETUP.md'
+            ? t('No printers are installed on this computer.')
+            : t('QZ Tray is not running on this computer. See docs/PRINTER-SETUP.md')
         )
         return
       }
@@ -133,10 +148,10 @@ export default function Settings() {
       setPrinters(found)
       setQzState('ready')
       if (!form.printerName && fallback) setForm((f) => ({ ...f, printerName: fallback }))
-      toast.success(`Found ${found.length} printer${found.length > 1 ? 's' : ''}.`)
+      toast.success(found.length > 1 ? t('Found {n} printers.', { n: found.length }) : t('Found 1 printer.'))
     } catch {
       setQzState('absent')
-      toast.error('Could not reach QZ Tray on this computer.')
+      toast.error(t('Could not reach QZ Tray on this computer.'))
     }
   }
 
@@ -148,12 +163,14 @@ export default function Settings() {
       // Every outcome gets reported. Saying nothing is what made a failed test
       // print look identical to a button that does not work.
       if (how === 'direct') {
-        toast.success(`Sent straight to ${form.printerName || 'the default printer'}.`)
+        toast.success(form.printerName
+          ? t('Sent straight to {printer}.', { printer: form.printerName })
+          : t('Sent straight to the default printer.'))
       } else if (how === 'empty') {
-        toast.error('The receipt did not render — nothing was sent to the printer.')
+        toast.error(t('The receipt did not render — nothing was sent to the printer.'))
       } else {
         const why = getLastPrintError()
-        toast.info(why ? `Printed through the browser instead — ${why}` : 'Sent to the browser print dialog.')
+        toast.info(why ? t('Printed through the browser instead — {why}', { why }) : t('Sent to the browser print dialog.'))
       }
     } finally {
       setTesting(false)
@@ -167,14 +184,14 @@ export default function Settings() {
     <div className="grid grid-2" style={{ gridTemplateColumns: 'minmax(0,1fr) 360px', alignItems: 'start' }}>
       <form className="card" onSubmit={save}>
         <div className="card-head">
-          <h2>Shop profile</h2>
+          <h2>{t('Shop profile')}</h2>
           <button type="submit" className="btn spacer" disabled={saving}>
-            {saving && <span className="spinner" />} Save changes
+            {saving && <span className="spinner" />} {t('Save changes')}
           </button>
         </div>
 
         <div className="card-body">
-          <Field label="Logo / icon" hint="Shown in the sidebar and printed on receipts. Square images work best.">
+          <Field label={t('Logo / icon')} hint={t('Shown in the sidebar and printed on receipts. Square images work best.')}>
             <div className="flex gap-3 items-center">
               <div className="sidebar-logo" style={{ width: 60, height: 60, fontSize: 24 }}>
                 {form.logo
@@ -183,11 +200,11 @@ export default function Settings() {
               </div>
               <div className="flex gap-2">
                 <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
-                  Upload image
+                  {t('Upload image')}
                 </button>
                 {form.logo && (
                   <button type="button" className="btn btn-ghost" onClick={() => setForm((f) => ({ ...f, logo: '' }))}>
-                    Remove
+                    {t('Remove')}
                   </button>
                 )}
               </div>
@@ -195,79 +212,79 @@ export default function Settings() {
             </div>
           </Field>
 
-          <Field label="Shop name" required>
+          <Field label={t('Shop name')} required>
             <input value={form.name} onChange={set('name')} required />
           </Field>
 
           <div className="row">
-            <Field label="Phone"><input value={form.phone} onChange={set('phone')} placeholder="+94 71 234 5678" /></Field>
-            <Field label="Currency symbol">
+            <Field label={t('Phone')}><input value={form.phone} onChange={set('phone')} placeholder="+94 71 234 5678" /></Field>
+            <Field label={t('Currency symbol')}>
               <input value={form.currency} onChange={set('currency')} list="cur-list" maxLength={5} />
               <datalist id="cur-list">{CURRENCIES.map((c) => <option key={c} value={c} />)}</datalist>
             </Field>
           </div>
 
-          <Field label="Address"><textarea value={form.address} onChange={set('address')} placeholder="Street, city" /></Field>
+          <Field label={t('Address')}><textarea value={form.address} onChange={set('address')} placeholder={t('Street, city')} /></Field>
 
           <div className="row">
-            <Field label="Receipt paper size" hint="Match your bill printer">
+            <Field label={t('Receipt paper size')} hint={t('Match your bill printer')}>
               <select value={form.paperSize} onChange={set('paperSize')}>
-                <option value="80mm">80mm thermal (standard POS)</option>
-                <option value="75mm">75mm roll</option>
-                <option value="58mm">58mm thermal (compact)</option>
-                <option value="A4">A4 (office printer)</option>
+                <option value="80mm">{t('80mm thermal (standard POS)')}</option>
+                <option value="75mm">{t('75mm roll')}</option>
+                <option value="58mm">{t('58mm thermal (compact)')}</option>
+                <option value="A4">{t('A4 (office printer)')}</option>
               </select>
             </Field>
-            <Field label="Tax rate %" hint="0 to hide tax on bills">
+            <Field label={t('Tax rate %')} hint={t('0 to hide tax on bills')}>
               <input type="number" step="0.01" min="0" max="100" value={form.taxRate} onChange={set('taxRate')} />
             </Field>
           </div>
 
-          <Field label="Default profit %"
+          <Field label={t('Default profit %')}
             hint={form.markupPercent === ''
-              ? 'Off — selling price is typed by hand on new products.'
-              : `New products: selling price = cost + ${form.markupPercent || 0}%. Clear it to switch off.`}>
+              ? t('Off — selling price is typed by hand on new products.')
+              : t('New products: selling price = cost + {pct}%. Clear it to switch off.', { pct: form.markupPercent || 0 })}>
             <div className="flex gap-2">
               <input type="number" step="0.01" min="0" value={form.markupPercent} onChange={set('markupPercent')}
-                placeholder="Off" style={{ maxWidth: 160 }} />
+                placeholder={t('Off')} style={{ maxWidth: 160 }} />
               {form.markupPercent !== '' && (
                 <button type="button" className="btn btn-ghost" onClick={() => setForm((f) => ({ ...f, markupPercent: '' }))}>
-                  Remove
+                  {t('Remove')}
                 </button>
               )}
             </div>
           </Field>
 
-          <Field label="Receipt footer message">
+          <Field label={t('Receipt footer message')}>
             <input value={form.receiptFooter} onChange={set('receiptFooter')}
-              placeholder="Thank you for shopping with us!" />
+              placeholder={t('Thank you for shopping with us!')} />
           </Field>
 
           <h3 style={{ marginTop: 26, marginBottom: 14, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
-            Receipt printer
+            {t('Receipt printer')}
           </h3>
 
           <Field
-            label="Printer"
+            label={t('Printer')}
             hint={
               form.printerName
-                ? 'Bills go straight to this printer with no dialog, as long as QZ Tray is running on the till.'
-                : 'Leave empty to print to the computer’s default printer instead.'
+                ? t('Bills go straight to this printer with no dialog, as long as QZ Tray is running on the till.')
+                : t('Leave empty to print to the computer’s default printer instead.')
             }
           >
             <div className="flex gap-2">
               {printers.length > 0 ? (
                 <select value={form.printerName} onChange={set('printerName')}>
-                  <option value="">Default printer</option>
+                  <option value="">{t('Default printer')}</option>
                   {printers.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               ) : (
                 <input value={form.printerName} onChange={set('printerName')} list="printer-list"
-                  placeholder="e.g. Xprinter XP-80C" />
+                  placeholder={t('e.g. {model}', { model: 'Xprinter XP-80C' })} />
               )}
               <button type="button" className="btn btn-ghost nowrap" onClick={detectPrinters}
                 disabled={qzState === 'checking'}>
-                {qzState === 'checking' && <span className="spinner spinner-dark" />} Detect printers
+                {qzState === 'checking' && <span className="spinner spinner-dark" />} {t('Detect printers')}
               </button>
             </div>
             <datalist id="printer-list">
@@ -281,8 +298,9 @@ export default function Settings() {
             <div className="alert alert-blue" style={{ marginTop: -6, marginBottom: 14 }}>
               <span>✓</span>
               <span>
-                QZ Tray connected — <strong>{printers.length} printers</strong> found. Bills
-                print directly, with no dialog box.
+                {rich(t('QZ Tray connected — {count} found. Bills print directly, with no dialog box.'), {
+                  count: <strong>{t('{n} printers', { n: printers.length })}</strong>,
+                })}
               </span>
             </div>
           )}
@@ -290,27 +308,26 @@ export default function Settings() {
             <div className="alert alert-amber" style={{ marginTop: -6, marginBottom: 14 }}>
               <span>!</span>
               <span>
-                QZ Tray was not found on this computer. Install it to print directly to a
-                named printer — see <code>docs/PRINTER-SETUP.md</code>. Until then bills print
-                through the browser.
+                {rich(t('QZ Tray was not found on this computer. Install it to print directly to a named printer — see {doc}. Until then bills print through the browser.'), {
+                  doc: <code>docs/PRINTER-SETUP.md</code>,
+                })}
               </span>
             </div>
           )}
 
           <div className="row">
-            <Field label="Copies per bill" hint="2 if you keep a merchant copy">
+            <Field label={t('Copies per bill')} hint={t('2 if you keep a merchant copy')}>
               <select value={form.printCopies} onChange={set('printCopies')}>
                 {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </Field>
-            <Field label="After taking payment">
+            <Field label={t('After taking payment')}>
               <label className="checkbox" style={{ paddingTop: 9 }}>
                 <input type="checkbox" checked={form.autoPrint} onChange={toggle('autoPrint')} />
-                Print straight away
+                {t('Print straight away')}
               </label>
               <div className="hint">
-                On: the bill prints and the till clears for the next customer. Off: a
-                receipt preview opens first.
+                {t('On: the bill prints and the till clears for the next customer. Off: a receipt preview opens first.')}
               </div>
             </Field>
           </div>
@@ -318,11 +335,12 @@ export default function Settings() {
           <div className="alert alert-blue">
             <span>🖨</span>
             <span>
-              <strong>Two ways to skip the print dialog.</strong> Best: install QZ Tray on
-              the till, hit <em>Detect printers</em> and pick your printer above — bills then
-              go to that exact printer. Simpler: open the app with{' '}
-              <code>start-pos.bat</code>, which prints to the Windows default printer.
-              Both are covered in <code>docs/PRINTER-SETUP.md</code>.
+              <strong>{t('Two ways to skip the print dialog.')}</strong>{' '}
+              {rich(t('Best: install QZ Tray on the till, hit {detect} and pick your printer above — bills then go to that exact printer. Simpler: open the app with {bat}, which prints to the Windows default printer. Both are covered in {doc}.'), {
+                detect: <em>{t('Detect printers')}</em>,
+                bat: <code>start-pos.bat</code>,
+                doc: <code>docs/PRINTER-SETUP.md</code>,
+              })}
             </span>
           </div>
         </div>
@@ -330,10 +348,10 @@ export default function Settings() {
 
       <div className="card" style={{ position: 'sticky', top: 76 }}>
         <div className="card-head">
-          <h2>Receipt preview</h2>
+          <h2>{t('Receipt preview')}</h2>
           <button type="button" className="btn btn-ghost btn-sm spacer"
             onClick={testPrint} disabled={testing}>
-            {testing && <span className="spinner spinner-dark" />} 🖨 Test print
+            {testing && <span className="spinner spinner-dark" />} {t('🖨 Test print')}
           </button>
         </div>
         <div className="card-body" style={{ background: 'var(--surface-2)', overflowX: 'auto' }}>

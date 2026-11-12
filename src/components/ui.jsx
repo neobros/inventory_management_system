@@ -1,7 +1,9 @@
+import { useLang } from '../i18n/LanguageContext'
 import { formatQty } from '../utils/units'
 import { useEffect } from 'react'
 
 export function Modal({ title, subtitle, children, footer, onClose, wide = false }) {
+  const { t } = useLang()
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose?.()
     window.addEventListener('keydown', onKey)
@@ -20,7 +22,7 @@ export function Modal({ title, subtitle, children, footer, onClose, wide = false
             <h2>{title}</h2>
             {subtitle && <p className="text-sm text-muted mt-2">{subtitle}</p>}
           </div>
-          <button type="button" className="btn btn-icon" onClick={onClose} aria-label="Close">✕</button>
+          <button type="button" className="btn btn-icon" onClick={onClose} aria-label={t('Close')}>✕</button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
@@ -30,15 +32,16 @@ export function Modal({ title, subtitle, children, footer, onClose, wide = false
 }
 
 export function ConfirmDialog({ title, message, confirmLabel = 'Delete', danger = true, busy, onConfirm, onClose }) {
+  const { t } = useLang()
   return (
     <Modal
       title={title}
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('Cancel')}</button>
           <button type="button" className={`btn ${danger ? 'btn-danger' : ''}`} onClick={onConfirm} disabled={busy}>
-            {busy && <span className="spinner" />} {confirmLabel}
+            {busy && <span className="spinner" />} {typeof confirmLabel === 'string' ? t(confirmLabel) : confirmLabel}
           </button>
         </>
       }
@@ -60,10 +63,11 @@ export function Empty({ icon = '📭', title, message, action }) {
 }
 
 export function Loading({ label = 'Loading…' }) {
+  const { t } = useLang()
   return (
     <div className="loading-page">
       <span className="spinner spinner-dark" style={{ width: 26, height: 26 }} />
-      <span className="text-sm text-muted">{label}</span>
+      <span className="text-sm text-muted">{t(label)}</span>
     </div>
   )
 }
@@ -103,8 +107,9 @@ export function Stat({ label, value, foot, icon, tone = 'brand' }) {
 
 /** Stock level shown as a colour-coded pill against the product's reorder point. */
 export function StockBadge({ stock, lowAt = 0, unit = 'pcs' }) {
+  const { t } = useLang()
   const n = Number(stock) || 0
-  if (n <= 0) return <span className="badge badge-red">Out of stock</span>
-  if (lowAt > 0 && n <= lowAt) return <span className="badge badge-amber">Low · {formatQty(n, unit)}</span>
-  return <span className="badge badge-green">{formatQty(n, unit)} in stock</span>
+  if (n <= 0) return <span className="badge badge-red">{t('Out of stock')}</span>
+  if (lowAt > 0 && n <= lowAt) return <span className="badge badge-amber">{t('Low · {qty}', { qty: formatQty(n, unit) })}</span>
+  return <span className="badge badge-green">{t('{qty} in stock', { qty: formatQty(n, unit) })}</span>
 }

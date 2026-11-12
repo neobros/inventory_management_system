@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext'
 import { listShops } from '../../services/shops'
 import { importProducts } from '../../services/productImport'
 import { Field, Loading, Stat } from '../../components/ui'
+import { useLang, translate as tr } from '../../i18n/LanguageContext'
 
 const SAMPLE = `[
   {
@@ -50,6 +51,7 @@ const FIELDS = [
 export default function AdminImport() {
   const { profile } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
   const fileInput = useRef(null)
 
   const [shops, setShops] = useState([])
@@ -65,7 +67,7 @@ export default function AdminImport() {
         setShops(list)
         if (list.length === 1) setShopId(list[0].id)
       })
-      .catch(() => toast.error('Could not load shops.'))
+      .catch(() => toast.error(tr('Could not load shops.')))
       .finally(() => setLoading(false))
   }, [toast])
 
@@ -77,10 +79,10 @@ export default function AdminImport() {
     try {
       parsed = JSON.parse(text)
       const rows = Array.isArray(parsed) ? parsed : parsed?.products
-      if (!Array.isArray(rows)) parseError = 'JSON must be a list [ ... ] or { "products": [ ... ] }.'
+      if (!Array.isArray(rows)) parseError = t('JSON must be a list [ ... ] or { "products": [ ... ] }.')
       else rowCount = rows.length
     } catch (err) {
-      parseError = `Not valid JSON: ${err.message}`
+      parseError = t('Not valid JSON: {error}', { error: err.message })
     }
   }
 
@@ -94,19 +96,19 @@ export default function AdminImport() {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!shopId) return toast.error('Choose a shop first.')
-    if (!parsed || parseError) return toast.error(parseError || 'Paste the product JSON first.')
+    if (!shopId) return toast.error(t('Choose a shop first.'))
+    if (!parsed || parseError) return toast.error(parseError || t('Paste the product JSON first.'))
 
     setBusy(true)
     setReport(null)
     try {
       const result = await importProducts(shopId, parsed, profile?.email || 'admin-import')
       setReport(result)
-      if (result.rejectedCount === 0) toast.success(`${result.createdCount} products added.`)
-      else if (result.createdCount > 0) toast.error(`${result.createdCount} added, ${result.rejectedCount} rejected.`)
-      else toast.error(`Nothing added — all ${result.rejectedCount} rows were rejected.`)
+      if (result.rejectedCount === 0) toast.success(t('{n} products added.', { n: result.createdCount }))
+      else if (result.createdCount > 0) toast.error(t('{added} added, {rejected} rejected.', { added: result.createdCount, rejected: result.rejectedCount }))
+      else toast.error(t('Nothing added — all {n} rows were rejected.', { n: result.rejectedCount }))
     } catch (err) {
-      toast.error(err.message || 'Import failed.')
+      toast.error(err.message || t('Import failed.'))
     } finally {
       setBusy(false)
     }
@@ -116,7 +118,7 @@ export default function AdminImport() {
   const copyRejected = async () => {
     const rows = report.rejected.map((r) => r.data)
     await navigator.clipboard.writeText(JSON.stringify(rows, null, 2))
-    toast.success('Rejected rows copied — fix them and paste back in.')
+    toast.success(t('Rejected rows copied — fix them and paste back in.'))
   }
 
   if (loading) return <Loading label="Loading shops…" />
@@ -126,23 +128,23 @@ export default function AdminImport() {
       <div className="grid grid-2" style={{ gridTemplateColumns: 'minmax(0,1fr) 400px', alignItems: 'start' }}>
         <form className="card" onSubmit={submit}>
           <div className="card-head">
-            <h2>Import products</h2>
+            <h2>{t('Import products')}</h2>
             <button type="submit" className="btn spacer" disabled={busy || !shopId || !parsed || !!parseError}>
-              {busy && <span className="spinner" />} Submit{rowCount ? ` ${rowCount} rows` : ''}
+              {busy && <span className="spinner" />} {rowCount ? t('Submit {n} rows', { n: rowCount }) : t('Submit')}
             </button>
           </div>
 
           <div className="card-body">
-            <Field label="Shop" required>
+            <Field label={t('Shop')} required>
               <select value={shopId} onChange={(e) => { setShopId(e.target.value); setReport(null) }} required>
-                <option value="">Choose a shop…</option>
+                <option value="">{t('Choose a shop…')}</option>
                 {shops.map((s) => (
                   <option key={s.id} value={s.id}>{s.name || s.id}</option>
                 ))}
               </select>
             </Field>
 
-            <Field label="Product JSON" required hint="Paste the list, or load a .json file.">
+            <Field label={t('Product JSON')} required hint={t('Paste the list, or load a .json file.')}>
               <textarea
                 className="mono"
                 value={text}
@@ -156,12 +158,12 @@ export default function AdminImport() {
 
             <div className="row" style={{ flex: 'none', gap: 8 }}>
               <button type="button" className="btn btn-ghost btn-sm" style={{ flex: 'none' }}
-                onClick={() => fileInput.current?.click()}>Load .json file</button>
+                onClick={() => fileInput.current?.click()}>{t('Load .json file')}</button>
               <button type="button" className="btn btn-ghost btn-sm" style={{ flex: 'none' }}
-                onClick={() => { setText(SAMPLE); setReport(null) }}>Insert example</button>
+                onClick={() => { setText(SAMPLE); setReport(null) }}>{t('Insert example')}</button>
               {text && (
                 <button type="button" className="btn btn-ghost btn-sm" style={{ flex: 'none' }}
-                  onClick={() => { setText(''); setReport(null) }}>Clear</button>
+                  onClick={() => { setText(''); setReport(null) }}>{t('Clear')}</button>
               )}
               <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={loadFile} />
             </div>
@@ -171,21 +173,21 @@ export default function AdminImport() {
             )}
             {!parseError && rowCount > 0 && (
               <p className="text-sm mt-3" style={{ color: 'var(--text-2)' }}>
-                {rowCount} row{rowCount === 1 ? '' : 's'} ready to send.
+                {t('{n} row(s) ready to send.', { n: rowCount })}
               </p>
             )}
           </div>
         </form>
 
         <div className="card">
-          <div className="card-head"><h3>Required format</h3></div>
+          <div className="card-head"><h3>{t('Required format')}</h3></div>
           <div className="card-body text-sm" style={{ color: 'var(--text-2)' }}>
-            <p style={{ marginTop: 0 }}>A JSON list, one object per product:</p>
+            <p style={{ marginTop: 0 }}>{t('A JSON list, one object per product:')}</p>
             <pre className="mono" style={preStyle}>{SAMPLE}</pre>
 
             <div className="table-wrap mt-3">
               <table>
-                <thead><tr><th>Field</th><th>Rule</th></tr></thead>
+                <thead><tr><th>{t('Field')}</th><th>{t('Rule')}</th></tr></thead>
                 <tbody>
                   {FIELDS.map(([name, type, need, rule]) => (
                     <tr key={name}>
@@ -194,8 +196,8 @@ export default function AdminImport() {
                         <div className="cell-sub">{type}</div>
                       </td>
                       <td>
-                        <span className={`badge ${need === 'Required' ? 'badge-red' : 'badge-grey'}`}>{need}</span>{' '}
-                        {rule}
+                        <span className={`badge ${need === 'Required' ? 'badge-red' : 'badge-grey'}`}>{t(need)}</span>{' '}
+                        {t(rule)}
                       </td>
                     </tr>
                   ))}
@@ -206,15 +208,14 @@ export default function AdminImport() {
             <div className="alert alert-amber mt-3">
               <span>!</span>
               <span>
-                Categories are saved by <strong>name</strong>. To use number{' '}
-                <code>categoryId</code> values, send an object that says what each number means:
+                {t('Categories are saved by')} <strong>{t('name')}</strong>. {t('To use number')}{' '}
+                <code>categoryId</code> {t('values, send an object that says what each number means:')}
               </span>
             </div>
             <pre className="mono mt-2" style={preStyle}>{SAMPLE_WITH_IDS}</pre>
 
             <p style={{ marginBottom: 0 }}>
-              A row is rejected if a required field is missing, a number is wrong, the unit is
-              not listed, or its SKU/barcode is already used. Other rows are still saved.
+              {t('A row is rejected if a required field is missing, a number is wrong, the unit is not listed, or its SKU/barcode is already used. Other rows are still saved.')}
             </p>
           </div>
         </div>
@@ -226,25 +227,26 @@ export default function AdminImport() {
 }
 
 function Report({ report, onCopyRejected }) {
+  const { t } = useLang()
   return (
     <>
       <div className="grid grid-3">
-        <Stat label="Received" value={report.received} icon="📄" tone="blue" />
-        <Stat label="Added" value={report.createdCount} icon="✅" tone="green" />
-        <Stat label="Rejected" value={report.rejectedCount} icon="⛔" tone={report.rejectedCount ? 'red' : 'green'} />
+        <Stat label={t('Received')} value={report.received} icon="📄" tone="blue" />
+        <Stat label={t('Products added')} value={report.createdCount} icon="✅" tone="green" />
+        <Stat label={t('Rejected')} value={report.rejectedCount} icon="⛔" tone={report.rejectedCount ? 'red' : 'green'} />
       </div>
 
       {report.rejected.length > 0 && (
         <div className="card">
           <div className="card-head">
-            <h3>Rejected rows</h3>
+            <h3>{t('Rejected rows')}</h3>
             <button type="button" className="btn btn-ghost btn-sm spacer" onClick={onCopyRejected}>
-              Copy rejected rows as JSON
+              {t('Copy rejected rows as JSON')}
             </button>
           </div>
           <div className="card-body tight table-wrap">
             <table>
-              <thead><tr><th className="num">Row</th><th>Product</th><th>SKU</th><th>Why</th></tr></thead>
+              <thead><tr><th className="num">{t('Row')}</th><th>{t('Product')}</th><th>SKU</th><th>{t('Why')}</th></tr></thead>
               <tbody>
                 {report.rejected.map((r) => (
                   <tr key={r.index}>
@@ -266,10 +268,10 @@ function Report({ report, onCopyRejected }) {
 
       {report.created.length > 0 && (
         <div className="card">
-          <div className="card-head"><h3>Added products</h3></div>
+          <div className="card-head"><h3>{t('Added products')}</h3></div>
           <div className="card-body tight table-wrap">
             <table>
-              <thead><tr><th className="num">Row</th><th>Product</th><th>SKU</th><th>Barcode</th></tr></thead>
+              <thead><tr><th className="num">{t('Row')}</th><th>{t('Product')}</th><th>SKU</th><th>{t('Barcode')}</th></tr></thead>
               <tbody>
                 {report.created.map((c) => (
                   <tr key={c.id}>

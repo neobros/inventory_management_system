@@ -12,9 +12,11 @@ import {
   listCategories, listProducts, renameCategory, deleteCategoryAndClear,
 } from '../services/products'
 import { ConfirmDialog } from './ui'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 
 export default function CategoryManager({ shopId }) {
   const toast = useToast()
+  const { t } = useLang()
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -25,7 +27,7 @@ export default function CategoryManager({ shopId }) {
   useEffect(() => {
     Promise.all([listCategories(shopId), listProducts(shopId)])
       .then(([c, p]) => { setCategories(c); setProducts(p) })
-      .catch(() => toast.error('Could not load categories.'))
+      .catch(() => toast.error(tr('Could not load categories.')))
       .finally(() => setLoading(false))
   }, [shopId, toast])
 
@@ -46,7 +48,7 @@ export default function CategoryManager({ shopId }) {
 
   const saveRename = async (row) => {
     const value = editing.value.trim()
-    if (!value) return toast.error('Enter a category name.')
+    if (!value) return toast.error(t('Enter a category name.'))
     if (value === row.name) { setEditing(null); return undefined }
     setBusy(true)
     try {
@@ -57,10 +59,10 @@ export default function CategoryManager({ shopId }) {
       setCategories(fresh)
       setEditing(null)
       toast.success(res.merged
-        ? `Merged into "${res.name}". ${row.productIds.length} product(s) moved.`
-        : `Renamed to "${res.name}". ${row.productIds.length} product(s) updated.`)
+        ? t('Merged into "{name}". {n} product(s) moved.', { name: res.name, n: row.productIds.length })
+        : t('Renamed to "{name}". {n} product(s) updated.', { name: res.name, n: row.productIds.length }))
     } catch (err) {
-      toast.error(err.message || 'Could not rename the category.')
+      toast.error(err.message || t('Could not rename the category.'))
     } finally {
       setBusy(false)
     }
@@ -75,11 +77,11 @@ export default function CategoryManager({ shopId }) {
       setProducts((list) => list.map((p) => (p.category === name ? { ...p, category: '' } : p)))
       setCategories((list) => list.filter((c) => c.id !== deleting.id))
       toast.success(deleting.productIds.length
-        ? `"${name}" deleted. ${deleting.productIds.length} product(s) now have no category.`
-        : `"${name}" deleted.`)
+        ? t('"{name}" deleted. {n} product(s) now have no category.', { name, n: deleting.productIds.length })
+        : t('"{name}" deleted.', { name }))
       setDeleting(null)
     } catch (err) {
-      toast.error(err.message || 'Could not delete the category.')
+      toast.error(err.message || t('Could not delete the category.'))
     } finally {
       setBusy(false)
     }
@@ -90,17 +92,17 @@ export default function CategoryManager({ shopId }) {
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Categories</h2>
-        <span className="spacer text-sm text-muted">{rows.length} categories</span>
+        <h2>{t('Categories')}</h2>
+        <span className="spacer text-sm text-muted">{t('{n} categories', { n: rows.length })}</span>
       </div>
       <div className="card-body" style={{ paddingTop: 4 }}>
-        {loading ? <div className="text-muted text-sm">Loading…</div> : rows.length === 0 ? (
-          <div className="text-muted text-sm">No categories yet. They are created when you add a product with a category.</div>
+        {loading ? <div className="text-muted text-sm">{t('Loading…')}</div> : rows.length === 0 ? (
+          <div className="text-muted text-sm">{t('No categories yet. They are created when you add a product with a category.')}</div>
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Category</th><th className="num">Products</th><th className="num">Actions</th></tr>
+                <tr><th>{t('Category')}</th><th className="num">{t('Products')}</th><th className="num">{t('Actions')}</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
@@ -122,15 +124,15 @@ export default function CategoryManager({ shopId }) {
                         {isEditing ? (
                           <>
                             <button type="button" className="btn btn-sm" onClick={() => saveRename(r)} disabled={busy}>
-                              {busy && <span className="spinner" />} Save
+                              {busy && <span className="spinner" />} {t('Save')}
                             </button>{' '}
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)} disabled={busy}>Cancel</button>
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)} disabled={busy}>{t('Cancel')}</button>
                           </>
                         ) : (
                           <>
-                            <button type="button" className="btn btn-icon" title="Rename"
+                            <button type="button" className="btn btn-icon" title={t('Rename')}
                               onClick={() => setEditing({ key: keyOf(r), value: r.name })}>✎</button>
-                            <button type="button" className="btn btn-icon" title="Delete" onClick={() => setDeleting(r)}>🗑</button>
+                            <button type="button" className="btn btn-icon" title={t('Delete')} onClick={() => setDeleting(r)}>🗑</button>
                           </>
                         )}
                       </td>
@@ -142,17 +144,17 @@ export default function CategoryManager({ shopId }) {
           </div>
         )}
         {uncategorised > 0 && (
-          <p className="text-sm text-muted" style={{ marginBottom: 0 }}>{uncategorised} product(s) have no category.</p>
+          <p className="text-sm text-muted" style={{ marginBottom: 0 }}>{t('{n} product(s) have no category.', { n: uncategorised })}</p>
         )}
       </div>
 
       {deleting && (
         <ConfirmDialog
-          title={`Delete "${deleting.name}"?`}
+          title={t('Delete "{name}"?', { name: deleting.name })}
           message={deleting.productIds.length
-            ? `${deleting.productIds.length} product(s) are in this category. They will NOT be deleted — they will be left with no category. Continue?`
-            : 'No products are in this category.'}
-          confirmLabel="Delete category"
+            ? t('{n} product(s) are in this category. They will NOT be deleted — they will be left with no category. Continue?', { n: deleting.productIds.length })
+            : t('No products are in this category.')}
+          confirmLabel={t('Delete category')}
           busy={busy}
           onConfirm={confirmDelete}
           onClose={() => setDeleting(null)}

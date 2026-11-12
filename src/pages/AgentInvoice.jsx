@@ -23,6 +23,7 @@ import { shopMarkup } from '../utils/pricing'
 import { printPortal, nextFrame, portalReady } from '../utils/print'
 import { isDesktop, revealFile } from '../utils/desktop'
 import { Field, Loading } from '../components/ui'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 const today = () => new Date().toISOString().slice(0, 10)
@@ -95,6 +96,7 @@ function blankDraft(shopId, markup) {
 export default function AgentInvoice() {
   const { shopId, shop, currency } = useAuth()
   const toast = useToast()
+  const { t } = useLang()
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -106,7 +108,7 @@ export default function AgentInvoice() {
   useEffect(() => {
     listProducts(shopId)
       .then(setProducts)
-      .catch(() => toast.error('Could not load products.'))
+      .catch(() => toast.error(tr('Could not load products.')))
       .finally(() => setLoading(false))
   }, [shopId, toast])
 
@@ -193,11 +195,13 @@ export default function AgentInvoice() {
     const have = new Set(draft.lines.map((l) => l.productId))
     const fresh = list.filter((p) => !have.has(p.id))
     if (!fresh.length) {
-      toast.info(list.length ? 'Those items are already on the invoice.' : 'No products to add.')
+      toast.info(list.length ? t('Those items are already on the invoice.') : t('No products to add.'))
       return
     }
     setDraft((d) => ({ ...d, lines: [...d.lines, ...fresh.map((p) => lineFor(p, d))] }))
-    toast.success(`Added ${fresh.length} item${fresh.length > 1 ? 's' : ''}${category ? ` from ${category}` : ''}.`)
+    toast.success(category
+      ? t('Added {n} item(s) from {category}.', { n: fresh.length, category: category === 'Uncategorised' ? t('Uncategorised') : category })
+      : t('Added {n} item(s).', { n: fresh.length }))
   }
 
   const clearLines = () => setDraft((d) => ({ ...d, lines: [] }))
@@ -219,7 +223,7 @@ export default function AgentInvoice() {
 
   const startNew = () => {
     setDraft(blankDraft(shopId, shopMarkup(shop)))
-    toast.info('New invoice started.')
+    toast.info(t('New invoice started.'))
   }
 
   const gross = r2(draft.lines.reduce((s, l) => s + num(l.unitPrice) * num(l.qty), 0))
@@ -227,9 +231,9 @@ export default function AgentInvoice() {
   const discount = r2(gross - total)
 
   const check = () => {
-    if (!draft.lines.length) { toast.error('Add at least one item.'); return false }
+    if (!draft.lines.length) { toast.error(t('Add at least one item.')); return false }
     const bad = draft.lines.findIndex((l) => !String(l.description).trim() || !(num(l.qty) > 0))
-    if (bad >= 0) { toast.error(`Line ${bad + 1} needs a description and a quantity.`); return false }
+    if (bad >= 0) { toast.error(t('Line {n} needs a description and a quantity.', { n: bad + 1 })); return false }
     return true
   }
 
@@ -249,12 +253,12 @@ export default function AgentInvoice() {
     setPrinting(true)
     try {
       await nextFrame()
-      if (!(await portalReady())) { toast.error('The invoice did not render.'); return }
+      if (!(await portalReady())) { toast.error(t('The invoice did not render.')); return }
       const portal = document.getElementById('print-portal')
       if (isDesktop() && window.stockpilot?.savePdf) {
         const res = await window.stockpilot.savePdf({ html: pdfDocument(portal.innerHTML), fileName })
-        if (!res?.ok) { toast.error(res?.error || 'Could not save the PDF.'); return }
-        toast.success('PDF saved to Downloads.')
+        if (!res?.ok) { toast.error(res?.error || t('Could not save the PDF.')); return }
+        toast.success(t('PDF saved to Downloads.'))
         revealFile(res.path)
       } else {
         // Browser: choose "Save as PDF" as the printer in the dialog.
@@ -281,15 +285,14 @@ export default function AgentInvoice() {
       <style>{INVOICE_CSS}</style>
 
       <div className="card no-print" style={{ position: 'sticky', top: 76 }}>
-        <div className="card-head"><h2>Agent invoice</h2></div>
+        <div className="card-head"><h2>{t('Agent invoice')}</h2></div>
         <div className="card-body">
           <p className="text-sm text-muted" style={{ marginTop: 0 }}>
-            A price list or invoice for agents, saved as a PDF. It is not a bill: stock, sales and reports
-            are not changed.
+            {t('A price list or invoice for agents, saved as a PDF. It is not a bill: stock, sales and reports are not changed.')}
           </p>
 
-          <Field label="Add item" hint="Name, SKU or barcode">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…"
+          <Field label={t('Add item')} hint={t('Name, SKU or barcode')}>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search products…')}
               onKeyDown={(e) => { if (e.key === 'Enter' && matches[0]) { e.preventDefault(); addProduct(matches[0]) } }} />
           </Field>
           {matches.length > 0 && (
@@ -305,46 +308,46 @@ export default function AgentInvoice() {
             </div>
           )}
           <button type="button" className="btn btn-ghost btn-sm" onClick={addBlank} style={{ marginBottom: 16 }}>
-            + Add a line by hand
+            {t('+ Add a line by hand')}
           </button>
 
-          <Field label="Add many at once">
+          <Field label={t('Add many at once')}>
             <div className="flex gap-2">
               <select value={bulkCat} onChange={(e) => setBulkCat(e.target.value)}>
-                <option value="">All items ({products.filter((p) => p.active !== false).length})</option>
-                {categories.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}
+                <option value="">{t('All items ({n})', { n: products.filter((p) => p.active !== false).length })}</option>
+                {categories.map(([c, n]) => <option key={c} value={c}>{c === 'Uncategorised' ? t('Uncategorised') : c} ({n})</option>)}
               </select>
-              <button type="button" className="btn btn-ghost nowrap" onClick={() => addMany(bulkCat)}>+ Add</button>
+              <button type="button" className="btn btn-ghost nowrap" onClick={() => addMany(bulkCat)}>{t('+ Add')}</button>
             </div>
           </Field>
           {draft.lines.length > 0 && (
             <button type="button" className="btn btn-ghost btn-sm" onClick={clearLines}
               style={{ marginTop: -6, marginBottom: 16 }}>
-              Remove all {draft.lines.length} lines
+              {t('Remove all {n} lines', { n: draft.lines.length })}
             </button>
           )}
 
           <div className="row">
-            <Field label="Markup % (all)" hint="Unit price = cost + this %">
+            <Field label={t('Markup % (all)')} hint={t('Unit price = cost + this %')}>
               <input type="number" step="0.01" value={draft.markup} onChange={(e) => applyMarkupAll(e.target.value)} />
             </Field>
-            <Field label="Rate % (all)" hint="Discount off unit price">
+            <Field label={t('Rate % (all)')} hint={t('Discount off unit price')}>
               <input type="number" step="0.01" min="0" max="100" value={draft.rate} onChange={(e) => applyRateAll(e.target.value)} />
             </Field>
           </div>
           <p className="text-sm text-muted" style={{ marginTop: -6 }}>
-            Changing these sets every line. Each line can then be changed on the invoice.
+            {t('Changing these sets every line. Each line can then be changed on the invoice.')}
           </p>
 
           <div className="flex gap-2" style={{ marginTop: 12 }}>
             <button type="button" className="btn" onClick={savePdf} disabled={printing} style={{ flex: 1 }}>
-              {printing && <span className="spinner" />} {isDesktop() ? '⬇ Save PDF' : '🖨 Save as PDF'}
+              {printing && <span className="spinner" />} {isDesktop() ? t('⬇ Save PDF') : t('🖨 Save as PDF')}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={startNew}>New</button>
+            <button type="button" className="btn btn-ghost" onClick={startNew}>{t('New')}</button>
           </div>
           {!isDesktop() && (
             <p className="text-sm text-muted" style={{ marginBottom: 0 }}>
-              In the print window, choose <strong>Save as PDF</strong> as the printer.
+              {t('In the print window, choose')} <strong>Save as PDF</strong> {t('as the printer.')}
             </p>
           )}
         </div>
@@ -355,7 +358,7 @@ export default function AgentInvoice() {
           {sheet(true)}
         </div>
         <div className="text-sm text-muted" style={{ textAlign: 'center', marginTop: 8 }}>
-          Line cost (not printed) is shown when you hover over a unit price.
+          {t('Line cost (not printed) is shown when you hover over a unit price.')}
         </div>
       </div>
 
@@ -366,6 +369,8 @@ export default function AgentInvoice() {
 
 /** The invoice page. `edit` shows inputs; without it, plain text for the PDF. */
 function InvoiceSheet({ edit, draft, shop, currency, gross, discount, total, set, setLine, removeLine }) {
+  // Only the edit-only hints are translated; the printed invoice stays in English.
+  const { t } = useLang()
   const text = (value, onChange, opts = {}) => (edit
     ? <input className={`inv-in ${opts.n ? 'n' : ''}`} value={value} onChange={onChange}
       type={opts.type || 'text'} step={opts.step} placeholder={opts.placeholder} title={opts.title} />
@@ -401,9 +406,9 @@ function InvoiceSheet({ edit, draft, shop, currency, gross, discount, total, set
 
       <div className="inv-to">
         <div className="inv-label">Bill to</div>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>{text(draft.agent, set('agent'), { placeholder: 'Agent / customer name' })}</div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>{text(draft.agent, set('agent'), { placeholder: t('Agent / customer name') })}</div>
         {edit
-          ? <textarea className="inv-in" value={draft.agentDetails} onChange={set('agentDetails')} placeholder="Address, phone (optional)" rows={2} />
+          ? <textarea className="inv-in" value={draft.agentDetails} onChange={set('agentDetails')} placeholder={t('Address, phone (optional)')} rows={2} />
           : draft.agentDetails && <div className="inv-muted" style={{ whiteSpace: 'pre-wrap' }}>{draft.agentDetails}</div>}
       </div>
 
@@ -412,7 +417,7 @@ function InvoiceSheet({ edit, draft, shop, currency, gross, discount, total, set
           <tr>
             <th style={{ width: 34 }}>No.</th>
             <th>Description</th>
-            {edit && <th className="n" style={{ width: 70 }} title="Not printed">Markup %</th>}
+            {edit && <th className="n" style={{ width: 70 }} title={t('Not printed')}>Markup %</th>}
             <th className="n" style={{ width: 105 }}>Unit price</th>
             <th className="n" style={{ width: 70 }}>Qty</th>
             <th className="n" style={{ width: 62 }}>Rate %</th>
@@ -423,13 +428,13 @@ function InvoiceSheet({ edit, draft, shop, currency, gross, discount, total, set
         <tbody>
           {draft.lines.length === 0 && (
             <tr><td colSpan={edit ? 8 : 6} className="inv-muted" style={{ textAlign: 'center', padding: 20 }}>
-              Search for a product on the left to add it.
+              {t('Search for a product on the left to add it.')}
             </td></tr>
           )}
           {draft.lines.map((l, i) => (
             <tr key={i}>
               <td>{i + 1}</td>
-              <td>{text(l.description, (e) => setLine(i, 'description', e.target.value), { placeholder: 'Description' })}</td>
+              <td>{text(l.description, (e) => setLine(i, 'description', e.target.value), { placeholder: t('Description') })}</td>
               {edit && (
                 <td className="n">
                   {l.cost === null
@@ -441,7 +446,7 @@ function InvoiceSheet({ edit, draft, shop, currency, gross, discount, total, set
               <td className="n">
                 {text(l.unitPrice, (e) => setLine(i, 'unitPrice', e.target.value), {
                   n: true, type: 'number', step: '0.01', show: money(l.unitPrice, ''),
-                  title: l.cost === null ? undefined : `Cost ${money(l.cost, currency)}`,
+                  title: l.cost === null ? undefined : t('Cost {amount}', { amount: money(l.cost, currency) }),
                 })}
               </td>
               <td className="n">
@@ -452,7 +457,7 @@ function InvoiceSheet({ edit, draft, shop, currency, gross, discount, total, set
               </td>
               <td className="n">{text(l.rate, (e) => setLine(i, 'rate', e.target.value), { n: true, type: 'number', step: '0.01', show: `${num(l.rate)}%` })}</td>
               <td className="n" style={{ fontWeight: 600 }}>{money(lineAmount(l), '')}</td>
-              {edit && <td><button type="button" className="inv-x" title="Remove" onClick={() => removeLine(i)}>✕</button></td>}
+              {edit && <td><button type="button" className="inv-x" title={t('Remove')} onClick={() => removeLine(i)}>✕</button></td>}
             </tr>
           ))}
         </tbody>

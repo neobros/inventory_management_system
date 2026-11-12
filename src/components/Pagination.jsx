@@ -1,3 +1,4 @@
+import { useLang } from '../i18n/LanguageContext'
 import { useEffect, useMemo, useState } from 'react'
 import { pageList, pageSlice } from '../utils/pagination'
 
@@ -41,6 +42,7 @@ export function usePagination(items, initialSize = 25) {
 
 export default function Pagination({ pager, label = 'rows', sizes = [25, 50, 100, 200] }) {
   const { page, pages, size, total, setPage, setSize, first, last } = pager
+  const { t } = useLang()
 
   // One page of results needs no controls, but the count is still useful.
   if (total === 0) return null
@@ -48,14 +50,14 @@ export default function Pagination({ pager, label = 'rows', sizes = [25, 50, 100
   return (
     <div className="pagination no-print">
       <span className="pagination-count">
-        {first}–{last} of {total} {label}
+        {t('{first}–{last} of {total} {label}', { first, last, total, label: t(label) })}
       </span>
 
       <div className="pagination-controls">
         {pages > 1 && (
           <>
             <button type="button" className="btn btn-ghost btn-sm" disabled={page === 1}
-              onClick={() => setPage(page - 1)}>‹ Prev</button>
+              onClick={() => setPage(page - 1)}>{t('‹ Prev')}</button>
 
             {pageList(page, pages).map((n, i) => (n === null ? (
               // eslint-disable-next-line react/no-array-index-key -- gaps have no id
@@ -67,13 +69,13 @@ export default function Pagination({ pager, label = 'rows', sizes = [25, 50, 100
             )))}
 
             <button type="button" className="btn btn-ghost btn-sm" disabled={page === pages}
-              onClick={() => setPage(page + 1)}>Next ›</button>
+              onClick={() => setPage(page + 1)}>{t('Next ›')}</button>
           </>
         )}
 
         <select value={size} onChange={(e) => setSize(Number(e.target.value))}
           className="pagination-size" aria-label={`${label} per page`}>
-          {sizes.map((n) => <option key={n} value={n}>{n} per page</option>)}
+          {sizes.map((n) => <option key={n} value={n}>{t('{n} per page', { n })}</option>)}
         </select>
       </div>
     </div>

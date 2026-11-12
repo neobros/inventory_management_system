@@ -6,6 +6,7 @@ import { productsRef } from '../../services/products'
 import { salesRef, listSales } from '../../services/sales'
 import { money, num, daysAgo, toDate, formatDate } from '../../utils/format'
 import { Stat, Empty, Loading } from '../../components/ui'
+import { useLang, translate as tr } from '../../i18n/LanguageContext'
 
 /**
  * Cross-tenant activity. Product and bill counts come from Firestore's
@@ -15,6 +16,7 @@ import { Stat, Empty, Loading } from '../../components/ui'
  */
 export default function AdminOverview() {
   const toast = useToast()
+  const { t } = useLang()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -49,7 +51,7 @@ export default function AdminOverview() {
 
       setRows(stats)
     } catch {
-      toast.error('Could not load platform data.')
+      toast.error(tr('Could not load platform data.'))
     } finally {
       setLoading(false)
     }
@@ -70,33 +72,32 @@ export default function AdminOverview() {
   return (
     <>
       <div className="grid grid-4 mb-4">
-        <Stat label="Shops" value={rows.length} foot={`${activeShops} trading this month`} icon="🏬" tone="brand" />
-        <Stat label="Products catalogued" value={num(totals.products)} foot="Across all tenants" icon="📦" tone="blue" />
-        <Stat label="Bills all time" value={num(totals.bills)} icon="🧾" tone="green" />
-        <Stat label="Bills last 30 days" value={num(totals.bills30)} icon="📈" tone="amber" />
+        <Stat label={t('Shops')} value={rows.length} foot={t('{n} trading this month', { n: activeShops })} icon="🏬" tone="brand" />
+        <Stat label={t('Products catalogued')} value={num(totals.products)} foot={t('Across all tenants')} icon="📦" tone="blue" />
+        <Stat label={t('Bills all time')} value={num(totals.bills)} icon="🧾" tone="green" />
+        <Stat label={t('Bills last 30 days')} value={num(totals.bills30)} icon="📈" tone="amber" />
       </div>
 
       <div className="alert alert-blue mb-4">
         <span>ℹ</span>
         <span>
-          Revenue is shown per shop in each shop's own currency, so the figures are not
-          summed into a platform total.
+          {t("Revenue is shown per shop in each shop's own currency, so the figures are not summed into a platform total.")}
         </span>
       </div>
 
       <div className="card">
-        <div className="card-head"><h2>Shop activity</h2></div>
+        <div className="card-head"><h2>{t('Shop activity')}</h2></div>
         <div className="card-body tight">
           {rows.length === 0 ? (
-            <Empty icon="🏬" title="No shops yet" message="Create a shop to see activity here." />
+            <Empty icon="🏬" title={t('No shops yet')} message={t('Create a shop to see activity here.')} />
           ) : (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Shop</th><th className="num">Products</th><th className="num">Bills (all time)</th>
-                    <th className="num">Bills (30d)</th><th className="num">Revenue (30d)</th>
-                    <th>Last sale</th><th>Status</th>
+                    <th>{t('Shop')}</th><th className="num">{t('Products')}</th><th className="num">{t('Bills (all time)')}</th>
+                    <th className="num">{t('Bills (30d)')}</th><th className="num">{t('Revenue (30d)')}</th>
+                    <th>{t('Last sale')}</th><th>{t('Status')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -119,10 +120,10 @@ export default function AdminOverview() {
                       <td className="num">{error ? '—' : num(bills)}</td>
                       <td className="num">{error ? '—' : num(bills30)}</td>
                       <td className="num strong">{error ? '—' : money(revenue30, shop.currency)}</td>
-                      <td className="text-sm text-muted nowrap">{lastSale ? formatDate(lastSale) : 'Never'}</td>
+                      <td className="text-sm text-muted nowrap">{lastSale ? formatDate(lastSale) : t('Never')}</td>
                       <td>
                         <span className={`badge ${shop.active === false ? 'badge-red' : bills30 > 0 ? 'badge-green' : 'badge-grey'}`}>
-                          {shop.active === false ? 'Suspended' : bills30 > 0 ? 'Trading' : 'Idle'}
+                          {shop.active === false ? t('Suspended') : bills30 > 0 ? t('Trading') : t('Idle')}
                         </span>
                       </td>
                     </tr>

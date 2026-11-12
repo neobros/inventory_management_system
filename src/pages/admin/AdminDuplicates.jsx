@@ -6,6 +6,7 @@ import { deleteProductsByIds } from '../../services/productDelete'
 import { findDuplicates } from '../../utils/productDuplicates'
 import { formatDate, money } from '../../utils/format'
 import { ConfirmDialog, Empty, Field, Loading, Stat } from '../../components/ui'
+import { useLang, translate as tr } from '../../i18n/LanguageContext'
 
 const ALL = '__all__'
 
@@ -22,6 +23,7 @@ const KINDS = [
  */
 export default function AdminDuplicates() {
   const toast = useToast()
+  const { t } = useLang()
 
   const [shops, setShops] = useState([])
   const [loading, setLoading] = useState(true)
@@ -37,7 +39,7 @@ export default function AdminDuplicates() {
         setShops(list)
         setShopId(list.length === 1 ? list[0].id : ALL)
       })
-      .catch(() => toast.error('Could not load shops.'))
+      .catch(() => toast.error(tr('Could not load shops.')))
       .finally(() => setLoading(false))
   }, [toast])
 
@@ -54,10 +56,10 @@ export default function AdminDuplicates() {
       }
       setResults(out)
       const bad = out.reduce((n, r) => n + r.dup.sku.length + r.dup.barcode.length, 0)
-      if (bad) toast.error(`${bad} duplicate SKU/barcode group${bad === 1 ? '' : 's'} found.`)
-      else toast.success('No duplicate SKUs or barcodes.')
+      if (bad) toast.error(t('{n} duplicate SKU/barcode group(s) found.', { n: bad }))
+      else toast.success(t('No duplicate SKUs or barcodes.'))
     } catch (err) {
-      toast.error(err.message || 'Scan failed.')
+      toast.error(err.message || t('Scan failed.'))
     } finally {
       setScanning(false)
     }
@@ -67,14 +69,14 @@ export default function AdminDuplicates() {
     setBusy(true)
     try {
       await deleteProductsByIds(deleting.shop.id, [deleting.product.id])
-      toast.success(`Deleted "${deleting.product.name}".`)
+      toast.success(t('Deleted "{name}".', { name: deleting.product.name }))
       // Re-run the check for that shop so the groups reflect the delete.
       const products = await listProducts(deleting.shop.id)
       setResults((rs) => rs.map((r) => (r.shop.id === deleting.shop.id
         ? { ...r, total: products.length, dup: findDuplicates(products) } : r)))
       setDeleting(null)
     } catch (err) {
-      toast.error(err.message || 'Delete failed.')
+      toast.error(err.message || t('Delete failed.'))
     } finally {
       setBusy(false)
     }
@@ -92,11 +94,11 @@ export default function AdminDuplicates() {
       }))])),
     }))
     await navigator.clipboard.writeText(JSON.stringify(data, null, 2))
-    toast.success('Report copied as JSON.')
+    toast.success(t('Report copied as JSON.'))
   }
 
   if (loading) return <Loading label="Loading shops…" />
-  if (!shops.length) return <Empty icon="🏬" title="No shops yet" message="Create a shop first." />
+  if (!shops.length) return <Empty icon="🏬" title={t('No shops yet')} message={t('Create a shop first.')} />
 
   const totals = results && {
     products: results.reduce((n, r) => n + r.total, 0),
@@ -109,38 +111,37 @@ export default function AdminDuplicates() {
     <div className="grid" style={{ gap: 16 }}>
       <div className="card">
         <div className="card-head">
-          <h2>Check for duplicate products</h2>
+          <h2>{t('Check for duplicate products')}</h2>
           {results && (
-            <button type="button" className="btn btn-ghost btn-sm spacer" onClick={copyJson}>Copy report as JSON</button>
+            <button type="button" className="btn btn-ghost btn-sm spacer" onClick={copyJson}>{t('Copy report as JSON')}</button>
           )}
         </div>
         <div className="card-body">
           <div className="row" style={{ alignItems: 'flex-end' }}>
-            <Field label="Shop">
+            <Field label={t('Shop')}>
               <select value={shopId} onChange={(e) => { setShopId(e.target.value); setResults(null) }}>
-                <option value={ALL}>All shops ({shops.length})</option>
+                <option value={ALL}>{t('All shops ({n})', { n: shops.length })}</option>
                 {shops.map((s) => <option key={s.id} value={s.id}>{s.name || s.id}</option>)}
               </select>
             </Field>
             <div style={{ flex: 'none', marginBottom: 14 }}>
               <button type="button" className="btn" onClick={scan} disabled={scanning}>
-                {scanning && <span className="spinner" />} 🔍 Check now
+                {scanning && <span className="spinner" />} {t('🔍 Check now')}
               </button>
             </div>
           </div>
           <p className="text-sm" style={{ color: 'var(--text-3)', margin: 0 }}>
-            Each shop is checked on its own — the same SKU in two different shops is fine.
-            SKU letter case and extra spaces are ignored.
+            {t('Each shop is checked on its own — the same SKU in two different shops is fine. SKU letter case and extra spaces are ignored.')}
           </p>
         </div>
       </div>
 
       {totals && (
         <div className="grid grid-4">
-          <Stat label="Products checked" value={totals.products} icon="📦" tone="blue" />
-          <Stat label="Duplicate SKUs" value={totals.sku} icon="🔁" tone={totals.sku ? 'red' : 'green'} />
-          <Stat label="Duplicate barcodes" value={totals.barcode} icon="▮▯▮" tone={totals.barcode ? 'red' : 'green'} />
-          <Stat label="Same names" value={totals.name} icon="📝" tone={totals.name ? 'amber' : 'green'} foot="For review only" />
+          <Stat label={t('Products checked')} value={totals.products} icon="📦" tone="blue" />
+          <Stat label={t('Duplicate SKUs')} value={totals.sku} icon="🔁" tone={totals.sku ? 'red' : 'green'} />
+          <Stat label={t('Duplicate barcodes')} value={totals.barcode} icon="▮▯▮" tone={totals.barcode ? 'red' : 'green'} />
+          <Stat label={t('Same names')} value={totals.name} icon="📝" tone={totals.name ? 'amber' : 'green'} foot={t('For review only')} />
         </div>
       )}
 
@@ -150,18 +151,18 @@ export default function AdminDuplicates() {
           <div className="card" key={shop.id}>
             <div className="card-head">
               <h3>{shop.name || shop.id}</h3>
-              <span className="spacer text-sm" style={{ color: 'var(--text-3)' }}>{total} products</span>
-              {!any && <span className="badge badge-green">No duplicates</span>}
+              <span className="spacer text-sm" style={{ color: 'var(--text-3)' }}>{t('{n} products', { n: total })}</span>
+              {!any && <span className="badge badge-green">{t('No duplicates')}</span>}
             </div>
             {any > 0 && (
               <div className="card-body" style={{ display: 'grid', gap: 18 }}>
                 {KINDS.filter(({ key }) => dup[key].length).map(({ key, label, tone, serious }) => (
                   <div key={key}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <span className={`badge badge-${tone}`}>{label}</span>
+                      <span className={`badge badge-${tone}`}>{t(label)}</span>
                       <span className="text-sm" style={{ color: 'var(--text-3)' }}>
-                        {dup[key].length} group{dup[key].length === 1 ? '' : 's'}
-                        {!serious && ' — may be fine if they are different sizes or colours'}
+                        {t('{n} group(s)', { n: dup[key].length })}
+                        {!serious && t(' — may be fine if they are different sizes or colours')}
                       </span>
                     </div>
                     <div style={{ display: 'grid', gap: 10 }}>
@@ -180,10 +181,12 @@ export default function AdminDuplicates() {
 
       {deleting && (
         <ConfirmDialog
-          title={`Delete "${deleting.product.name}"?`}
-          message={`SKU ${deleting.product.sku || '—'} · barcode ${deleting.product.barcode || '—'} · stock ${deleting.product.stock ?? 0}. `
-            + `It will be removed from ${deleting.shop.name || deleting.shop.id} for good. Past sales and stock history are kept.`}
-          confirmLabel="Delete"
+          title={t('Delete "{name}"?', { name: deleting.product.name })}
+          message={t('SKU {sku} · barcode {barcode} · stock {stock}. It will be removed from {shop} for good. Past sales and stock history are kept.', {
+            sku: deleting.product.sku || '—', barcode: deleting.product.barcode || '—',
+            stock: deleting.product.stock ?? 0, shop: deleting.shop.name || deleting.shop.id,
+          })}
+          confirmLabel={t('Delete')}
           busy={busy}
           onConfirm={removeOne}
           onClose={() => !busy && setDeleting(null)}
@@ -194,24 +197,25 @@ export default function AdminDuplicates() {
 }
 
 function Group({ group, kind, currency, onDelete }) {
+  const { t } = useLang()
   const shown = kind === 'barcode' ? group.key : group.products[0][kind === 'sku' ? 'sku' : 'name']
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
       <div className="text-sm" style={{ padding: '7px 12px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
         <strong className={kind === 'name' ? '' : 'mono'}>{shown}</strong>
-        <span style={{ color: 'var(--text-3)' }}> — used by {group.products.length} products</span>
+        <span style={{ color: 'var(--text-3)' }}>{t(' — used by {n} products', { n: group.products.length })}</span>
       </div>
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Product</th><th>SKU</th><th>Barcode</th><th className="num">Price</th><th className="num">Stock</th><th>Added</th><th className="num" /></tr>
+            <tr><th>{t('Product')}</th><th>SKU</th><th>{t('Barcode')}</th><th className="num">{t('Price')}</th><th className="num">{t('Stock')}</th><th>{t('Added')}</th><th className="num" /></tr>
           </thead>
           <tbody>
             {group.products.map((p) => (
               <tr key={p.id}>
                 <td className="cell-title">
                   {p.name}
-                  {p.active === false && <span className="badge badge-grey" style={{ marginLeft: 6 }}>Inactive</span>}
+                  {p.active === false && <span className="badge badge-grey" style={{ marginLeft: 6 }}>{t('Inactive')}</span>}
                 </td>
                 <td className="mono text-sm">{p.sku || '—'}</td>
                 <td className="mono text-sm">{p.barcode || '—'}</td>
@@ -219,7 +223,7 @@ function Group({ group, kind, currency, onDelete }) {
                 <td className="num">{p.stock ?? 0}</td>
                 <td className="text-sm nowrap">{formatDate(p.createdAt, false)}</td>
                 <td className="num">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => onDelete(p)}>Delete</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => onDelete(p)}>{t('Delete')}</button>
                 </td>
               </tr>
             ))}

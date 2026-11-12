@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { getLatestRelease, isNewer, normaliseDownloadUrl } from '../services/appVersion'
 import { isDesktop, appVersion, installUpdate, openUpdateLink } from '../utils/desktop'
 import { Modal } from './ui'
+import { useLang, translate as tr } from '../i18n/LanguageContext'
 
 /**
  * Checks the published release on startup and offers the update.
@@ -13,6 +14,7 @@ import { Modal } from './ui'
  */
 export default function UpdateGate() {
   const { user, loading } = useAuth()
+  const { t } = useLang()
   const [release, setRelease] = useState(null)
   const [current, setCurrent] = useState('')
   const [open, setOpen] = useState(false)
@@ -71,7 +73,7 @@ export default function UpdateGate() {
   const startUpdate = useCallback(async () => {
     setBusy(true)
     setPercent(0)
-    setMessage('Downloading…')
+    setMessage(tr('Downloading…'))
 
     const result = await installUpdate(
       { url: normaliseDownloadUrl(release.downloadUrl), version: release.version },
@@ -79,11 +81,11 @@ export default function UpdateGate() {
     )
 
     if (result?.started) {
-      setMessage('Starting the installer — the app will close.')
+      setMessage(tr('Starting the installer — the app will close.'))
       return
     }
     setBusy(false)
-    setMessage(result?.reason || result?.error || 'The update could not be downloaded.')
+    setMessage(result?.reason || result?.error || tr('The update could not be downloaded.'))
   }, [release])
 
   if (!open || !release) return null
@@ -92,24 +94,24 @@ export default function UpdateGate() {
 
   return (
     <Modal
-      title={`Update available — version ${release.version}`}
-      subtitle={current ? `You are running ${current}` : undefined}
+      title={t('Update available — version {version}', { version: release.version })}
+      subtitle={current ? t('You are running {version}', { version: current }) : undefined}
       onClose={mandatory || busy ? undefined : () => setOpen(false)}
       footer={
         <>
           {!mandatory && !busy && (
             <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>
-              Later
+              {t('Later')}
             </button>
           )}
           {!busy && (
             <button type="button" className="btn btn-ghost"
               onClick={() => openUpdateLink(normaliseDownloadUrl(release.downloadUrl))}>
-              Download manually
+              {t('Download manually')}
             </button>
           )}
           <button type="button" className="btn" onClick={startUpdate} disabled={busy}>
-            {busy && <span className="spinner" />} {busy ? 'Updating…' : 'Update now'}
+            {busy && <span className="spinner" />} {busy ? t('Updating…') : t('Update now')}
           </button>
         </>
       }
@@ -123,7 +125,7 @@ export default function UpdateGate() {
       {mandatory && (
         <div className="alert alert-amber mb-4">
           <span>!</span>
-          <span>This update is required. The till cannot be used until it is installed.</span>
+          <span>{t('This update is required. The till cannot be used until it is installed.')}</span>
         </div>
       )}
 
@@ -135,7 +137,7 @@ export default function UpdateGate() {
               transition: 'width 0.2s',
             }} />
           </div>
-          <div className="text-sm text-muted mt-2">{percent}% — this is a large file, please wait.</div>
+          <div className="text-sm text-muted mt-2">{t('{percent}% — this is a large file, please wait.', { percent })}</div>
         </div>
       )}
 
@@ -143,8 +145,7 @@ export default function UpdateGate() {
 
       {!busy && !message && (
         <p className="text-sm text-muted">
-          The installer downloads, then replaces this version automatically. Your data is
-          stored online and is not affected.
+          {t('The installer downloads, then replaces this version automatically. Your data is stored online and is not affected.')}
         </p>
       )}
     </Modal>

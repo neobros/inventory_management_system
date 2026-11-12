@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { money } from '../utils/format'
 import { axisTicks } from '../utils/report'
+import { useLang } from '../i18n/LanguageContext'
 
 /**
  * Daily revenue over the selected period.
@@ -28,10 +29,13 @@ const parseDay = (iso) => {
   return new Date(y, (m || 1) - 1, d || 1)
 }
 
-const shortDate = (iso) =>
-  parseDay(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+const shortDate = (iso, locale) =>
+  parseDay(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short' })
 
 export default function RevenueChart({ series, currency }) {
+  const { t, lang } = useLang()
+  // Month names follow the chosen language.
+  const locale = lang === 'si' ? 'si-LK' : undefined
   const [hover, setHover] = useState(null)
   const svgRef = useRef(null)
 
@@ -89,7 +93,7 @@ export default function RevenueChart({ series, currency }) {
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label={`Daily revenue from ${series[0][0]} to ${series[series.length - 1][0]}`}
+        aria-label={t('Daily revenue from {from} to {to}', { from: series[0][0], to: series[series.length - 1][0] })}
       >
         {/* Gridlines — hairline, solid, recessive. */}
         {ticks.map((t) => (
@@ -131,7 +135,7 @@ export default function RevenueChart({ series, currency }) {
             <text key={i} x={points[i].x} y={HEIGHT - 8}
               textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}
               fill="var(--text-3)" fontSize="11" fontFamily="inherit">
-              {shortDate(points[i].day)}
+              {shortDate(points[i].day, locale)}
             </text>
           ))}
       </svg>
@@ -149,7 +153,7 @@ export default function RevenueChart({ series, currency }) {
           transform: `translate(${shift}, calc(-100% - 14px))`,
         }}>
           <strong>{money(hover.value, currency)}</strong>
-          <span>{parseDay(hover.day).toLocaleDateString(undefined, {
+          <span>{parseDay(hover.day).toLocaleDateString(locale, {
             weekday: 'short', day: 'numeric', month: 'short',
           })}</span>
         </div>

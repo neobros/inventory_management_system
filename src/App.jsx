@@ -1,6 +1,7 @@
 import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
+import { LanguageProvider, useLang } from './i18n/LanguageContext'
 import Layout from './components/Layout'
 import { Loading } from './components/ui'
 import { isDesktop } from './utils/desktop'
@@ -52,6 +53,7 @@ function homeFor(profile) {
 function Guard({ allow, children }) {
   const { user, profile, loading } = useAuth()
   const location = useLocation()
+  const { t } = useLang()
 
   if (loading) return <Loading label="Signing you in…" />
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
@@ -61,10 +63,9 @@ function Guard({ allow, children }) {
       <div className="auth-screen">
         <div className="auth-card">
           <div className="auth-logo">🔒</div>
-          <h1>No shop assigned</h1>
+          <h1>{t('No shop assigned')}</h1>
           <p className="sub">
-            This login exists but is not linked to a shop yet. Ask your administrator to
-            finish setting up your account.
+            {t('This login exists but is not linked to a shop yet. Ask your administrator to finish setting up your account.')}
           </p>
           <SignOutButton />
         </div>
@@ -77,8 +78,8 @@ function Guard({ allow, children }) {
       <div className="auth-screen">
         <div className="auth-card">
           <div className="auth-logo">⛔</div>
-          <h1>Account disabled</h1>
-          <p className="sub">Your access has been switched off. Contact your shop owner.</p>
+          <h1>{t('Account disabled')}</h1>
+          <p className="sub">{t('Your access has been switched off. Contact your shop owner.')}</p>
           <SignOutButton />
         </div>
       </div>
@@ -93,10 +94,9 @@ function Guard({ allow, children }) {
       <div className="auth-screen">
         <div className="auth-card">
           <div className="auth-logo">🖥️</div>
-          <h1>Admin panel is on the web</h1>
+          <h1>{t('Admin panel is on the web')}</h1>
           <p className="sub">
-            This is the shop till app. Sign in to the web application to create
-            shops and manage the platform.
+            {t('This is the shop till app. Sign in to the web application to create shops and manage the platform.')}
           </p>
           <SignOutButton />
         </div>
@@ -112,8 +112,9 @@ function Guard({ allow, children }) {
 
 function SignOutButton() {
   const { logout } = useAuth()
+  const { t } = useLang()
   return (
-    <button type="button" className="btn btn-ghost btn-block" onClick={logout}>Sign out</button>
+    <button type="button" className="btn btn-ghost btn-block" onClick={logout}>{t('Sign out')}</button>
   )
 }
 
@@ -131,6 +132,7 @@ export default function App() {
   return (
     <Router>
       <AuthProvider>
+        <LanguageProvider>
         <ToastProvider>
           {/* Both render nothing on the web. */}
           <TitleBar />
@@ -166,6 +168,7 @@ export default function App() {
             <Route path="*" element={<RootRedirect />} />
           </Routes>
         </ToastProvider>
+        </LanguageProvider>
       </AuthProvider>
     </Router>
   )
