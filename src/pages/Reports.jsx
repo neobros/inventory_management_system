@@ -43,9 +43,9 @@ export default function Reports() {
   const [returns, setReturns] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const [preset, setPreset] = useState('30')
-  const [from, setFrom] = useState(() => presetRange('30').from)
-  const [to, setTo] = useState(() => presetRange('30').to)
+  const [preset, setPreset] = useState('today')
+  const [from, setFrom] = useState(() => presetRange('today').from)
+  const [to, setTo] = useState(() => presetRange('today').to)
 
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState('revenue')

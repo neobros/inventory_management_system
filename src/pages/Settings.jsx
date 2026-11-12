@@ -7,6 +7,7 @@ import { printBill, getLastPrintError } from '../utils/print'
 import { Field, Loading } from '../components/ui'
 import { ReceiptBody } from '../components/Receipt'
 import { createPortal } from 'react-dom'
+import { shopMarkup } from '../utils/pricing'
 
 const CURRENCIES = ['Rs.', '$', '€', '£', '₹', '₦', '¥', 'AED', 'PKR', 'BDT', 'KES']
 
@@ -53,6 +54,7 @@ export default function Settings() {
         printerName: shop.printerName || '',
         autoPrint: shop.autoPrint !== false,
         printCopies: shop.printCopies || 1,
+        markupPercent: shopMarkup(shop),
       })
     }
   }, [shop])
@@ -85,6 +87,8 @@ export default function Settings() {
         ...form,
         taxRate: Number(form.taxRate) || 0,
         printCopies: Number(form.printCopies) || 1,
+        // Empty = switched off (stored as null so it does not fall back to 25 %).
+        markupPercent: form.markupPercent === '' ? null : Number(form.markupPercent) || 0,
       })
       await refreshShop()
       toast.success('Settings saved.')
@@ -218,6 +222,21 @@ export default function Settings() {
               <input type="number" step="0.01" min="0" max="100" value={form.taxRate} onChange={set('taxRate')} />
             </Field>
           </div>
+
+          <Field label="Default profit %"
+            hint={form.markupPercent === ''
+              ? 'Off — selling price is typed by hand on new products.'
+              : `New products: selling price = cost + ${form.markupPercent || 0}%. Clear it to switch off.`}>
+            <div className="flex gap-2">
+              <input type="number" step="0.01" min="0" value={form.markupPercent} onChange={set('markupPercent')}
+                placeholder="Off" style={{ maxWidth: 160 }} />
+              {form.markupPercent !== '' && (
+                <button type="button" className="btn btn-ghost" onClick={() => setForm((f) => ({ ...f, markupPercent: '' }))}>
+                  Remove
+                </button>
+              )}
+            </div>
+          </Field>
 
           <Field label="Receipt footer message">
             <input value={form.receiptFooter} onChange={set('receiptFooter')}
