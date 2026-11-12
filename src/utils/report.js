@@ -61,7 +61,12 @@ export function buildReport(sales, { from, to, costByProduct = {}, categoryByPro
     ;(sale.items || []).forEach((item) => {
       const qty = Number(item.qty) || 0
       const net = Number(item.net) || 0
-      const cost = (costByProduct[item.productId] || 0) * qty
+      // Bills record the cost each line used (oldest batch first). Older bills
+      // without it fall back to today's cost.
+      const unitCost = item.cost !== undefined && item.cost !== null
+        ? Number(item.cost) || 0
+        : (costByProduct[item.productId] || 0)
+      const cost = unitCost * qty
 
       itemsSold += qty
       cogs += cost
@@ -94,25 +99,52 @@ export function buildReport(sales, { from, to, costByProduct = {}, categoryByPro
 
   // Refunds are money that came back, and stock that came back with it. Leaving
   // them out overstates both revenue and units sold.
-  const refunds = scopedReturns.reduce((sum, r) => sum + (Number(r.total) || 0), 0)
+  //
+  // Returns saved before the bill-discount fix could refund more than the bill
+  // was paid; each bill's refunds are capped at its total.
+  const billTotal = new Map(sales.map((s) => [s.id, Number(s.total) || 0]))
+  const refundedSoFar = new Map()
+  const refundOf = new Map()
+  ;[...scopedReturns]
+    .sort((a, b) => (toDate(a.createdAt) || 0) - (toDate(b.createdAt) || 0))
+    .forEach((r) => {
+      let amount = Number(r.total) || 0
+      if (billTotal.has(r.saleId)) {
+        const done = refundedSoFar.get(r.saleId) || 0
+        amount = Math.max(0, Math.min(amount, billTotal.get(r.saleId) - done))
+        refundedSoFar.set(r.saleId, done + amount)
+      }
+      refundOf.set(r, amount)
+    })
+  const refundAmount = (r) => refundOf.get(r) ?? (Number(r.total) || 0)
+
+  const refunds = scopedReturns.reduce((sum, r) => sum + refundAmount(r), 0)
   let refundedUnits = 0
+  let returnedCost = 0
 
   scopedReturns.forEach((r) => {
     ;(r.items || []).forEach((line) => {
       const qty = Number(line.qty) || 0
       const net = Number(line.net) || 0
       refundedUnits += qty
+      // The goods are back on the shelf, so their cost is no longer spent.
+      const lineCost = (line.cost !== undefined && line.cost !== null
+        ? Number(line.cost) || 0
+        : (costByProduct[line.productId] || 0)) * qty
+      returnedCost += lineCost
 
       const entry = byProduct[line.productId]
       if (!entry) return
       entry.qty -= qty
       entry.revenue -= net
-      entry.cost -= (costByProduct[line.productId] || 0) * qty
+      entry.cost -= lineCost
       entry.returned = (entry.returned || 0) + qty
     })
   })
 
   const netRevenue = round2(revenue - refunds)
+  const refundedTax = scopedReturns.reduce((sum, r) => sum + (Number(r.tax) || 0), 0)
+  const netTax = round2(Math.max(0, tax - refundedTax))
 
   // Item figures are already net of returns, so share is against net revenue.
   const items = Object.values(byProduct).map((p) => ({
@@ -128,10 +160,11 @@ export function buildReport(sales, { from, to, costByProduct = {}, categoryByPro
     const when = toDate(r.createdAt)
     if (!when) return
     const day = isoDay(when)
-    if (day in byDay) byDay[day] = round2(byDay[day] - (Number(r.total) || 0))
+    if (day in byDay) byDay[day] = round2(byDay[day] - refundAmount(r))
   })
 
   const peakHour = Math.max(...byHour)
+  const netCogs = round2(cogs - returnedCost)
 
   return {
     scoped,
@@ -145,11 +178,12 @@ export function buildReport(sales, { from, to, costByProduct = {}, categoryByPro
     tax,
     bills,
     itemsSold: itemsSold - refundedUnits,
-    cogs,
+    cogs: netCogs,
     // Tax is collected on behalf of the state, so it is not profit. Refunds are
     // already out of netRevenue, and the returned goods are back out of cogs.
-    profit: round2(netRevenue - tax - cogs),
-    margin: netRevenue ? ((netRevenue - tax - cogs) / netRevenue) * 100 : 0,
+    // Tax refunded on returns comes back out of the tax figure too.
+    profit: round2(netRevenue - netTax - netCogs),
+    margin: netRevenue ? ((netRevenue - netTax - netCogs) / netRevenue) * 100 : 0,
     average: bills ? round2(netRevenue / bills) : 0,
     days: Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b)),
     byMethod,

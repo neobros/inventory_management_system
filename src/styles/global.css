@@ -146,6 +146,13 @@ body.desktop-chrome .scrim { top: 38px; }
 .nav-item:hover { background: var(--sidebar-2); color: #e2e8f0; }
 .nav-item.active { background: var(--brand); color: #fff; }
 .nav-item .ico { width: 18px; text-align: center; font-size: 15px; flex-shrink: 0; }
+/* Sub-menus (e.g. Shop Settings → Shop Profile, Categories). */
+.nav-parent { width: 100%; border: 0; background: none; font-family: inherit; text-align: left; }
+.nav-parent.has-active { color: #e2e8f0; }
+.nav-caret { margin-left: auto; font-size: 11px; transition: transform 0.15s; }
+.nav-caret.open { transform: rotate(90deg); }
+.nav-sub { margin: 2px 0 4px 18px; padding-left: 8px; border-left: 1px solid rgba(255, 255, 255, 0.08); }
+.nav-sub .nav-item { padding: 7px 10px; font-size: 13px; }
 
 .sidebar-foot { padding: 12px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
 .sidebar-user {

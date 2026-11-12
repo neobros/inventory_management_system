@@ -7,7 +7,9 @@ import {
 } from '../services/products'
 import { generateBarcode } from '../utils/barcode'
 import { money } from '../utils/format'
-import { isMeasured, normaliseUnit } from '../utils/units'
+import { formatQty, isMeasured, normaliseUnit, roundQty } from '../utils/units'
+import { shopMarkup, priceFromMarkup, markupFromPrice } from '../utils/pricing'
+import { batchesOf, batchFields } from '../utils/batches'
 import { printLabels, nextFrame } from '../utils/print'
 import { Modal, ConfirmDialog, Field, Empty, Loading, StockBadge } from '../components/ui'
 import Pagination, { usePagination } from '../components/Pagination'
@@ -52,7 +54,7 @@ export default function Products() {
   useEffect(() => { load() }, [load])
 
   const openNew = () => {
-    setForm({ ...BLANK, barcode: generateBarcode() })
+    setForm({ ...BLANK, barcode: generateBarcode(), markup: shopMarkup(shop) })
     setEditing('new')
   }
 
@@ -61,6 +63,7 @@ export default function Products() {
       name: p.name || '', sku: p.sku || '', barcode: p.barcode || '',
       category: p.category || '', unit: normaliseUnit(p.unit) || 'pcs',
       cost: p.cost ?? '', price: p.price ?? '', stock: p.stock ?? '',
+      markup: markupFromPrice(p.cost ?? '', p.price ?? ''),
       lowStockAt: p.lowStockAt ?? '', supplier: p.supplier || '', active: p.active !== false,
     })
     setEditing(p)
@@ -68,7 +71,17 @@ export default function Products() {
 
   const set = (key) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
-    setForm((f) => ({ ...f, [key]: value }))
+    setForm((f) => {
+      const next = { ...f, [key]: value }
+      // Cost or profit % changed: work the selling price out.
+      if (key === 'cost' || key === 'markup') {
+        const price = priceFromMarkup(next.cost, next.markup)
+        if (price !== null) next.price = String(price)
+      }
+      // Selling price typed by hand: show the profit % it gives.
+      if (key === 'price' && f.markup !== '') next.markup = markupFromPrice(next.cost, value)
+      return next
+    })
   }
 
   const save = async (e) => {
@@ -110,7 +123,7 @@ export default function Products() {
       } else {
         // Stock is only moved from the Stock Movements screen so every change
         // there leaves an audit trail; editing here keeps the count untouched.
-        const { stock, ...rest } = form
+        const { stock, markup, ...rest } = form
         const changes = {
           ...rest,
           sku: (rest.sku || '').trim(),
@@ -118,6 +131,13 @@ export default function Products() {
           cost: Number(rest.cost) || 0,
           price: Number(rest.price) || 0,
           lowStockAt: Number(rest.lowStockAt) || 0,
+        }
+        // Changing the cost here corrects the cost of everything on hand. A new
+        // delivery at a different price goes through Stock in instead, which
+        // keeps the old and new cost apart.
+        if (changes.cost !== (Number(editing.cost) || 0)) {
+          const recosted = batchesOf(editing).map((b) => ({ ...b, cost: changes.cost }))
+          Object.assign(changes, batchFields(recosted, changes.cost), { lastCost: changes.cost })
         }
         await updateProduct(shopId, editing.id, changes)
         setProducts((list) => list
@@ -238,7 +258,7 @@ export default function Products() {
                         </button>
                       </td>
                       <td className="text-sm">{p.category || '—'}</td>
-                      <td className="num">{money(p.cost, currency)}</td>
+                      <td className="num"><CostCell product={p} currency={currency} /></td>
                       <td className="num strong">{money(p.price, currency)}</td>
                       <td><StockBadge stock={p.stock} lowAt={p.lowStockAt} unit={p.unit} /></td>
                       <td className="num nowrap">
@@ -305,6 +325,16 @@ export default function Products() {
             <div className="row">
               <Field label="Cost price" hint="What you pay your supplier">
                 <input type="number" step="0.01" min="0" value={form.cost} onChange={set('cost')} placeholder="0.00" />
+                {editing !== 'new' && new Set(batchesOf(editing).map((b) => b.cost)).size > 1 && (
+                  <div className="hint" style={{ color: '#b45309' }}>
+                    <CostBreakdown product={editing} currency={currency} />
+                    Stock is held at {new Set(batchesOf(editing).map((b) => b.cost)).size} costs. Changing this sets
+                    all of it to one cost. For a new delivery at a new cost, use Stock in.
+                  </div>
+                )}
+              </Field>
+              <Field label="Profit %" hint={form.markup === '' ? 'Off' : 'Fills selling price'}>
+                <input type="number" step="0.01" value={form.markup} onChange={set('markup')} placeholder="Off" />
               </Field>
               <Field label="Selling price" required>
                 <input type="number" step="0.01" min="0" value={form.price} onChange={set('price')} placeholder="0.00" required />
@@ -379,5 +409,43 @@ export default function Products() {
         />
       )}
     </>
+  )
+}
+
+/**
+ * Stock on hand grouped by what it cost, oldest (sells next) first.
+ * Batches at the same cost are added together.
+ */
+function costGroups(product) {
+  const groups = []
+  batchesOf(product).forEach((b) => {
+    const last = groups[groups.length - 1]
+    if (last && last.cost === b.cost) last.qty = roundQty(last.qty + b.qty)
+    else groups.push({ qty: b.qty, cost: b.cost })
+  })
+  return groups
+}
+
+/** One cost, or each cost with how much stock is held at it. */
+function CostCell({ product, currency }) {
+  const groups = costGroups(product)
+  if (groups.length < 2) return money(product.cost, currency)
+  return (
+    <div title="Oldest stock sells first" style={{ lineHeight: 1.35 }}>
+      {groups.map((g, i) => (
+        <div key={i}>
+          <span className="text-sm text-muted">{formatQty(g.qty, product.unit || 'pcs')} @ </span>
+          {money(g.cost, currency)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CostBreakdown({ product, currency }) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      {costGroups(product).map((g) => `${formatQty(g.qty, product.unit || 'pcs')} @ ${money(g.cost, currency)}`).join(' · ')}
+    </div>
   )
 }

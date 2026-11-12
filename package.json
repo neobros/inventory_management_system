@@ -1,7 +1,7 @@
 {
   "name": "inventory-management-system",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "Inventory management and point-of-sale till",
   "author": "StockPilot",
   "type": "module",
@@ -35,7 +35,7 @@
         "nsis"
       ],
       "artifactName": "StockPilot-Till-Setup-${version}.exe",
-      "icon": "build/icon.png"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
